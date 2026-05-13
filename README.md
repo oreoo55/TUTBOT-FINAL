@@ -98,13 +98,36 @@ This README is the **entry point for backend (PHP/Laravel + MySQL) and AI develo
 
 ## 2. Tech Stack
 
-### Frontend (this repo)
+### Project Structure
+This repository contains both the frontend and the backend:
+
+```
+/
+├── backend/                      # Laravel 11 API
+│   ├── .env.example              # Backend environment template
+│   ├── app/, routes/, ...        # Laravel source
+│   └── database/
+│       └── dump.sql              # MySQL database dump
+│
+├── src/                          # React Frontend source
+│   ├── .env.example              # Frontend environment template
+│   ├── components/
+│   ├── pages/
+│   └── ...
+│
+├── .env.example                  # Root environment template (legacy)
+├── .gitignore
+├── package.json                  # Frontend dependencies
+└── README.md                     # This file
+```
+
+### Frontend
 - React 18 + TypeScript + React Router v6
 - Tailwind CSS (with dark mode via `class` strategy)
 - Framer Motion for animation
 - Lucide React for icons
 
-### Backend (separate repo)
+### Backend
 - PHP 8.2+
 - Laravel 11+ with Sanctum (token auth)
 - MySQL 8+
@@ -119,63 +142,29 @@ This README is the **entry point for backend (PHP/Laravel + MySQL) and AI develo
 
 ## 3. Repository Layout
 
-This frontend repo:
+This repository contains both the frontend and the backend:
 
 ```
 /
-├── App.tsx                       # Route definitions
-├── index.tsx                     # React entry point
-├── index.css                     # Tailwind + theme tokens (light/dark)
-├── tailwind.config.js
+├── backend/                      # Laravel 11 API
+│   ├── app/, routes/, ...        # Laravel source
+│   ├── database/
+│   │   └── dump.sql              # MySQL database dump
+│   └── .env.example              # Backend environment template
 │
-├── components/                   # Reusable UI
-│   ├── Navbar.tsx                # Top nav + theme toggle
-│   ├── Footer.tsx
-│   ├── Layout.tsx                # Wraps all main routes
-│   ├── LandmarkCard.tsx
-│   ├── SearchDropdown.tsx        # Hero search autocomplete
-│   ├── AIAssistant.tsx           # Floating Tut-Assistant chatbot
-│   ├── ToastStack.tsx            # Global toasts + Undo
-│   ├── Counter.tsx, FAQItem.tsx
+├── src/                          # React Frontend source
+│   ├── components/               # Reusable UI
+│   ├── contexts/                 # Theme & User state
+│   ├── data/                     # Seed datasets
+│   ├── pages/                    # Main route components
+│   ├── lib/                      # API client & types
+│   └── .env.example              # Frontend environment template
 │
-├── contexts/
-│   ├── ThemeContext.tsx          # light/dark mode (persisted in localStorage)
-│   └── UserCollectionsContext.tsx# favorites + wishlist (currently in-memory)
-│
-├── pages/
-│   ├── Landing.tsx               # /
-│   ├── Discover.tsx              # /discover
-│   ├── LandmarkDetail.tsx        # /landmark/:id
-│   ├── Booking.tsx               # /book/:id (multi-step booking)
-│   ├── Profile.tsx               # /profile
-│   ├── Community.tsx             # /community
-│   ├── About.tsx, Help.tsx
-│   ├── Login.tsx, Signup.tsx
-│   └── NotFound.tsx
-│
-├── data/
-│   └── mockData.ts               # 115-landmark dataset + mock users/reviews
-│
-├── lib/                          # ← created for backend integration
-│   ├── api.ts                    # fetch wrapper (auth, error handling)
-│   └── types.ts                  # shared API types — the contract
-│
-├── docs/                         # ← documentation for backend / AI devs
-│   ├── API_CONTRACT.md           # exhaustive endpoint specs
-│   ├── DATABASE_SCHEMA.sql       # runnable MySQL schema
-│   └── AI_INTEGRATION.md         # chatbot + recommendations brief
-│
-├── .env.example                  # required environment variables
-└── README.md                     # this file
-```
-
-Recommended workspace:
-
-```
-tutbot-project/
-├── frontend/       ← this repo
-├── backend/        ← Laravel API (separate)
-└── ai-service/     ← optional standalone AI worker (or inline in backend)
+├── docs/                         # Specifications & DB schema
+├── .env.example                  # Root environment template (legacy)
+├── .gitignore
+├── package.json                  # Frontend dependencies
+└── README.md                     # This file
 ```
 
 ---
