@@ -1,0 +1,46 @@
+src/App.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/AIAssistant.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/Counter.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/FAQItem.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/Footer.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/Layout.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/Navbar.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/NotificationBell.tsx(44,7): error TS6133: 'typeLabel' is declared but its value is never read.
+src/components/SearchDropdown.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/SearchDropdown.tsx(1,55): error TS6133: 'Component' is declared but its value is never read.
+src/components/SearchDropdown.tsx(34,3): error TS6133: 'align' is declared but its value is never read.
+src/components/ToastStack.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/contexts/ThemeContext.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/contexts/UserCollectionsContext.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/index.tsx(2,1): error TS6133: 'React' is declared but its value is never read.
+src/lib/pdfTicket.ts(27,7): error TS6133: 'CREAM' is declared but its value is never read.
+src/pages/About.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/pages/About.tsx(3,10): error TS6133: 'Compass' is declared but its value is never read.
+src/pages/AdminDashboard.tsx(10,1): error TS6133: 'ConfirmModal' is declared but its value is never read.
+src/pages/AdminDashboard.tsx(274,10): error TS6133: 'rejectConfirmId' is declared but its value is never read.
+src/pages/AdminDashboard.tsx(391,9): error TS6133: 'handleRejectCancel' is declared but its value is never read.
+src/pages/Booking.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/pages/Booking.tsx(4,15): error TS6133: 'getAuthToken' is declared but its value is never read.
+src/pages/Booking.tsx(91,11): error TS6133: 'childPrice' is declared but its value is never read.
+src/pages/Community.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/pages/Community.tsx(26,1): error TS6192: All imports in import declaration are unused.
+src/pages/Community.tsx(27,15): error TS6133: 'getAuthToken' is declared but its value is never read.
+src/pages/Community.tsx(194,110): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/pages/Community.tsx(216,47): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/pages/Discover.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/pages/Discover.tsx(22,15): error TS7016: Could not find a declaration file for module 'leaflet'. 'D:/End/Tutbot/node_modules/leaflet/dist/leaflet-src.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/leaflet` if it exists or add a new declaration (.d.ts) file containing `declare module 'leaflet';`
+src/pages/Discover.tsx(424,13): error TS2322: Type '{ children: (Element | Element[])[]; center: number[]; zoom: number; scrollWheelZoom: boolean; className: string; }' is not assignable to type 'IntrinsicAttributes & MapContainerProps & RefAttributes<LeafletMap>'.
+  Property 'center' does not exist on type 'IntrinsicAttributes & MapContainerProps & RefAttributes<LeafletMap>'.
+src/pages/Discover.tsx(430,15): error TS2322: Type '{ attribution: string; url: string; }' is not assignable to type 'IntrinsicAttributes & TileLayerProps & RefAttributes<LeafletTileLayer>'.
+  Property 'attribution' does not exist on type 'IntrinsicAttributes & TileLayerProps & RefAttributes<LeafletTileLayer>'.
+src/pages/Discover.tsx(438,26): error TS2322: Type '{ children: Element; className: string; }' is not assignable to type 'IntrinsicAttributes & PopupProps & RefAttributes<LeafletPopup>'.
+  Property 'className' does not exist on type 'IntrinsicAttributes & PopupProps & RefAttributes<LeafletPopup>'.
+src/pages/Landing.tsx(1,55): error TS6133: 'Component' is declared but its value is never read.
+src/pages/LandmarkDetail.tsx(1,38): error TS6133: 'lazy' is declared but its value is never read.
+src/pages/NotFound.tsx(1,27): error TS6133: 'Component' is declared but its value is never read.
+src/pages/PublicProfile.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/pages/PublicProfile.tsx(6,14): error TS6133: 'Trophy' is declared but its value is never read.
+src/pages/Signup.tsx(43,9): error TS6133: 'navigate' is declared but its value is never read.
+src/pages/Signup.tsx(220,9): error TS6133: 'goToStep' is declared but its value is never read.
+src/pages/TripDetails.tsx(66,11): error TS6133: 'childPrice' is declared but its value is never read.

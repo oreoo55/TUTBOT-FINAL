@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* =========================================
+   LIGHT MODE (default)
+   ========================================= */
+:root {
+  /* Surfaces */
+  --bg-base: #FAFAF7;
+  --bg-elevated: #FFFFFF;
+  --bg-subtle: #F3EFE6;
+  /* Typography */
+  --text-primary: #1A1A1A;
+  --text-secondary: rgba(26, 26, 26, 0.65);
+  --text-muted: rgba(26, 26, 26, 0.45);
+  /* Borders & dividers */
+  --border-subtle: #F3EFE6;
+  --border-strong: rgba(26, 26, 26, 0.12);
+  /* Accents */
+  --accent-royal: #1E3A8A;
+  --accent-gold: #D4AF37;
+  --accent-gold-soft: rgba(212, 175, 55, 0.12);
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --glass-blur: blur(12px);
+  /* Adaptive image overlays */
+  --image-fade: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.8));
+  --image-overlay-bottom: linear-gradient(
+    to top,
+    rgba(15, 23, 42, 0.85),
+    rgba(15, 23, 42, 0.2) 50%,
+    transparent
+  );
+  /* Shadows */
+  --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.05);
+  --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.08);
+}
+/* =========================================
+   DARK MODE
+   - Supports both [data-theme='dark'] and .dark
+   ========================================= */
+[data-theme='dark'],
+html.dark {
+  /* Surfaces */
+  --bg-base: #0B1120;
+  --bg-elevated: #1A2236;
+  --bg-subtle: #243049;
+  /* Typography — crisp, high-contrast */
+  --text-primary: #F8FAFC;
+  --text-secondary: #E2E8F0;
+  --text-muted: rgba(226, 232, 240, 0.55);
+  /* Borders & dividers — soft, accented with gold */
+  --border-subtle: #243049;
+  --border-strong: rgba(212, 175, 55, 0.25);
+  /* Accents — brighter gold for contrast against dark bg */
+  --accent-royal: #6082F2;
+  --accent-gold: #D4AF37;
+  --accent-gold-soft: rgba(212, 175, 55, 0.18);
+  /* Glassmorphism — visible frosted effect on dark */
+  --glass-bg: rgba(30, 41, 59, 0.6);
+  --glass-bg-subtle: rgba(30, 41, 59, 0.5);
+  --glass-border: rgba(212, 175, 55, 0.2);
+  --glass-blur: blur(14px);
+  /* Adaptive image overlays — fade into dark navy */
+  --image-fade: linear-gradient(to bottom, transparent, rgba(15, 23, 42, 0.9));
+  --image-overlay-bottom: linear-gradient(
+    to top,
+    rgba(11, 17, 32, 0.95),
+    rgba(11, 17, 32, 0.4) 50%,
+    transparent
+  );
+  /* Shadows — deeper for dark elevation */
+  --shadow-soft: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+/* =========================================
+   UTILITIES
+   ========================================= */
+@layer utilities {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-soft);
+  }
+  .glass-subtle {
+    background: var(--glass-bg-subtle);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+  }
+  .glass-dark {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-soft);
+  }
+  .image-fade {
+    background-image: var(--image-fade);
+  }
+  .image-overlay-bottom {
+    background-image: var(--image-overlay-bottom);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .smooth-transition {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+}
+/* =========================================
+   BASE STYLES
+   ========================================= */
+html {
+  scroll-behavior: smooth;
+}
+body {
+  @apply font-sans antialiased;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  transition:
+    background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+h1, h2, h3, h4, h5, h6 {
+  @apply font-serif;
+  color: var(--text-primary);
+}
+p {
+  color: var(--text-primary);
+}
+/* Form controls inherit theme tokens */
+input, textarea, select {
+  color: var(--text-primary);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+/* Leaflet map styles */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  z-index: 10;
+}
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+/* Selection color */
+::selection {
+  background: var(--accent-gold);
+  color: #FFFFFF;
+}
