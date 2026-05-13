@@ -3,6 +3,57 @@
 
 A modern React frontend for discovering Egyptian landmarks, planning trips with an AI assistant, booking tickets, and engaging with a traveler community.
 
+---
+
+## 0. Quick Start for Collaborators
+
+If you just downloaded/cloned this project, follow these steps to get it running:
+
+### 1. Prerequisites
+- **Node.js** (v18+)
+- **PHP** (v8.2+) & **Composer**
+- **MySQL** (XAMPP/Laragon/Local install)
+
+### 2. Frontend Setup
+```bash
+# Install dependencies
+npm install
+
+# Create environment file
+cp .env.example .env
+
+# Start dev server
+npm run dev
+```
+
+### 3. Backend Setup
+```bash
+cd backend
+
+# Install dependencies
+composer install
+
+# Create environment file
+cp .env.example .env
+
+# Generate app key
+php artisan key:generate
+
+# Start Laravel server
+php artisan serve
+```
+
+### 4. Database Setup
+1. Create a MySQL database named `tutbot`.
+2. Configure your database credentials in `backend/.env`.
+3. Import the initial data:
+```bash
+# From the project root
+mysql -u root -p tutbot < backend/database/dump.sql
+```
+
+---
+
 This README is the **entry point for backend (PHP/Laravel + MySQL) and AI developers**. Detailed contracts live in the `docs/` folder.
 
 ---
