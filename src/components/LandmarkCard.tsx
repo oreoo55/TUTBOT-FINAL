@@ -10,7 +10,7 @@ interface LandmarkCardProps {
   landmark: Landmark;
   variant?: 'default' | 'tall';
 }
-export function LandmarkCard({
+export const LandmarkCard = React.memo(function LandmarkCard({
   landmark,
   variant = 'default'
 }: LandmarkCardProps) {
@@ -184,7 +184,7 @@ export function LandmarkCard({
       }
     </motion.div>);
 
-}
+});
 interface QuickActionButtonProps {
   active: boolean;
   onClick: (e: React.MouseEvent) => void;

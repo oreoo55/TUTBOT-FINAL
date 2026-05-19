@@ -5,7 +5,7 @@ interface FAQItemProps {
   question: string;
   answer: string;
 }
-export function FAQItem({ question, answer }: FAQItemProps) {
+export const FAQItem = React.memo(function FAQItem({ question, answer }: FAQItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <div className="border-b border-sand dark:border-slate-border last:border-0">
@@ -58,4 +58,4 @@ export function FAQItem({ question, answer }: FAQItemProps) {
       </AnimatePresence>
     </div>);
 
-}
+});

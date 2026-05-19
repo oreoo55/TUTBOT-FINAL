@@ -84,10 +84,16 @@ class User extends Authenticatable
     {
         $this->increment('xp', $amount);
 
-        while ($this->xp >= $this->next_level_xp) {
+        $iterations = 0;
+        while ($this->xp >= $this->next_level_xp && $this->next_level_xp > 0 && $iterations < 100) {
             $this->xp -= $this->next_level_xp;
             $this->level++;
             $this->next_level_xp = (int) (100 * pow(2, $this->level - 1));
+            $iterations++;
+        }
+
+        if ($this->next_level_xp <= 0) {
+            $this->next_level_xp = 500;
         }
 
         $this->save();

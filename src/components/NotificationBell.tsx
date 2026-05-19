@@ -38,6 +38,8 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string }> = {
   cancellation_rejected: { icon: <XCircle className="w-3.5 h-3.5" />, color: 'text-red-500' },
   booking_confirmed: { icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'text-green-500' },
   booking_cancelled: { icon: <Ban className="w-3.5 h-3.5" />, color: 'text-red-500' },
+  payment_approved: { icon: <CheckCircle2 className="w-3.5 h-3.5" />, color: 'text-emerald-500' },
+  payment_rejected: { icon: <XCircle className="w-3.5 h-3.5" />, color: 'text-red-500' },
   payment_refunded: { icon: <DollarSign className="w-3.5 h-3.5" />, color: 'text-emerald-500' },
 };
 
@@ -51,6 +53,8 @@ const typeLabel: Record<string, string> = {
   cancellation_rejected: 'Cancellation rejected',
   booking_confirmed: 'Booking confirmed',
   booking_cancelled: 'Booking cancelled',
+  payment_approved: 'Payment approved',
+  payment_rejected: 'Payment rejected',
   payment_refunded: 'Payment refunded',
 };
 
@@ -123,7 +127,7 @@ export function NotificationBell() {
     if (n.type === 'like' || n.type === 'comment' || n.type === 'reply') {
       return n.data.post_id ? `/community?post=${n.data.post_id}` : '/community';
     }
-    if (n.type === 'payment_refunded' || n.type === 'booking_confirmed' || n.type === 'booking_cancelled' || n.type === 'cancellation_approved' || n.type === 'cancellation_rejected') {
+    if (n.type === 'payment_approved' || n.type === 'payment_rejected' || n.type === 'payment_refunded' || n.type === 'booking_confirmed' || n.type === 'booking_cancelled' || n.type === 'cancellation_approved' || n.type === 'cancellation_rejected') {
       return n.data.booking_id ? `/trip/${n.data.booking_id}` : '/profile';
     }
     if (n.type === 'trip_reminder') {
@@ -153,6 +157,10 @@ export function NotificationBell() {
         return <>Booking confirmed for <strong>{d.landmark_name}</strong> on {d.booking_date}!</>;
       case 'booking_cancelled':
         return <><strong>{d.admin_name || 'TUTBOT Support'}</strong> cancelled your booking at <strong>{d.landmark_name}</strong>{d.reason ? `: ${d.reason}` : ''}</>;
+      case 'payment_approved':
+        return <>Payment of <strong>{d.amount} {d.currency}</strong> approved for <strong>{d.landmark_name}</strong>!</>;
+      case 'payment_rejected':
+        return <>Payment for <strong>{d.landmark_name}</strong> was rejected{d.reason ? `: ${d.reason}` : ''}</>;
       case 'payment_refunded':
         return <>Payment of <strong>{d.amount} {d.currency}</strong> refunded for <strong>{d.landmark_name}</strong></>;
       default:

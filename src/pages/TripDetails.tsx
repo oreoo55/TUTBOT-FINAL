@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../lib/api';
+import { api, getAuthToken } from '../lib/api';
 import { ConfirmModal } from '../components/ConfirmModal';
 import QRCode from 'qrcode';
 import { downloadTicketPdf } from '../lib/pdfTicket';
+import { Skeleton } from '../components/Skeleton';
 import {
   ChevronLeft,
   Calendar,
@@ -16,12 +17,18 @@ import {
   AlertTriangle,
   Clock,
   Hourglass,
-  Download,
 } from 'lucide-react';
 
 export function TripDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!getAuthToken()) {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
+
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -30,14 +37,19 @@ export function TripDetails() {
   const [cancelResult, setCancelResult] = useState<any>(null);
   const [cancelError, setCancelError] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [dataError, setDataError] = useState('');
   const ticketRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    setDataError('');
+    setBooking(null);
     api.get<any>(`/bookings/${id}`)
-      .then(setBooking)
-      .catch(() => navigate('/profile'))
+      .then(res => { setBooking(res); setDataError(''); })
+      .catch(() => setDataError('Failed to load booking details'))
       .finally(() => setLoading(false));
-  }, [id, navigate]);
+  }, [id]);
 
   useEffect(() => {
     if (booking?.qr_token) {
@@ -82,13 +94,43 @@ export function TripDetails() {
       payerPhone: booking.payer_phone,
       qrDataUrl,
       userName: booking.user?.name || booking.user,
+      createdAt: booking.created_at,
     }, `ticket-${booking.confirmation_code || 'booking'}.pdf`);
   };
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+      <div className="max-w-4xl mx-auto px-6 py-12 space-y-6">
+        <Skeleton className="h-5 w-32" />
+        <div className="bg-white dark:bg-slate-card rounded-[30px] border border-sand dark:border-slate-border overflow-hidden">
+          <Skeleton className="h-48 w-full !rounded-none" />
+          <div className="p-6 space-y-4">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <div className="grid grid-cols-2 gap-4">
+              <Skeleton className="h-20 rounded-xl" />
+              <Skeleton className="h-20 rounded-xl" />
+              <Skeleton className="h-20 rounded-xl" />
+              <Skeleton className="h-20 rounded-xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (dataError) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-12 text-center">
+        <p className="text-navy/60 dark:text-slate-300/60 mb-4">{dataError}</p>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => window.location.reload()}
+          className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+        >
+          Retry
+        </motion.button>
       </div>
     );
   }
@@ -96,6 +138,22 @@ export function TripDetails() {
   if (!booking) return null;
 
   const lm = booking.landmark;
+  if (!lm) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-12 text-center">
+        <p className="text-navy/60 dark:text-slate-300/60 mb-4">Booking details not available.</p>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => navigate('/profile')}
+          className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+        >
+          Back to Profile
+        </motion.button>
+      </div>
+    );
+  }
+
   const isCancelled = booking.status === 'cancelled';
   const isCancellationRequested = !!booking.cancellation_requested_at || cancelRequested;
   const isPast = booking.booking_date < new Date().toISOString().slice(0, 10);
@@ -103,12 +161,16 @@ export function TripDetails() {
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12 pb-24">
-      <button
+      <motion.button
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        whileHover={{ x: -3 }}
+        whileTap={{ scale: 0.97 }}
         onClick={() => navigate('/profile')}
         className="flex items-center gap-2 text-navy/60 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 transition-colors mb-8 font-medium"
       >
         <ChevronLeft className="w-5 h-5" /> Back to Profile
-      </button>
+      </motion.button>
 
       {cancelResult && cancelResult.refund && (
         <motion.div
@@ -123,7 +185,10 @@ export function TripDetails() {
         </motion.div>
       )}
 
-      <div ref={ticketRef} className="bg-white dark:bg-slate-card rounded-[30px] shadow-soft dark:shadow-soft-dark border border-sand dark:border-slate-border overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        ref={ticketRef} className="bg-white dark:bg-slate-card rounded-[30px] shadow-soft dark:shadow-soft-dark border border-sand dark:border-slate-border overflow-hidden">
         {/* Header */}
         <div className="relative h-48 sm:h-56">
           <img
@@ -289,24 +354,33 @@ export function TripDetails() {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
               onClick={handleDownloadPdf}
               className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-sand dark:border-slate-border rounded-xl font-medium text-navy dark:text-slate-100 hover:bg-sand/30 dark:hover:bg-slate-border transition-colors"
             >
-              <Download className="w-4 h-4" /> Download PDF
-            </button>
-            <Link
-              to={`/landmark/${lm.id}`}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-sand dark:border-slate-border rounded-xl font-medium text-navy dark:text-slate-100 hover:bg-sand/30 dark:hover:bg-slate-border transition-colors"
+              Download PDF
+            </motion.button>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
             >
-              <MapPin className="w-4 h-4" /> View Landmark
-            </Link>
+              <Link
+                to={`/landmark/${lm.id}`}
+                className="flex items-center justify-center gap-2 px-6 py-3 border-2 border-sand dark:border-slate-border rounded-xl font-medium text-navy dark:text-slate-100 hover:bg-sand/30 dark:hover:bg-slate-border transition-colors"
+              >
+                <MapPin className="w-4 h-4" /> View Landmark
+              </Link>
+            </motion.div>
             {isCancellationRequested ? (
               <div className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl text-amber-700 dark:text-amber-400 text-sm font-medium">
                 <Hourglass className="w-4 h-4" /> Cancellation pending admin approval
               </div>
             ) : canCancel ? (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setConfirmOpen(true)}
                 disabled={cancelling}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-red-200 dark:border-red-500/30 rounded-xl font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50"
@@ -321,11 +395,11 @@ export function TripDetails() {
                     <AlertTriangle className="w-4 h-4" /> Request Cancellation
                   </>
                 )}
-              </button>
+              </motion.button>
             ) : null}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <ConfirmModal
         open={confirmOpen}

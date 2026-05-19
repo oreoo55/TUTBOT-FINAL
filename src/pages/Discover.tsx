@@ -21,7 +21,9 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { api } from '../lib/api';
+import { CardSkeleton } from '../components/Skeleton';
 import { LandmarkCard } from '../components/LandmarkCard';
+import { EmptyState } from '../components/EmptyState';
 // Fix Leaflet default icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -120,13 +122,14 @@ export function Discover() {
   const [filtersOpenMobile, setFiltersOpenMobile] = useState(false);
   const [allLandmarks, setAllLandmarks] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState<'loading' | 'error' | 'loaded'>('loading');
   useEffect(() => {
     api.get<any>('/landmarks?per_page=100').then(res => {
       const items = Array.isArray(res) ? res : (res.data ?? []);
       setAllLandmarks(items);
       setCategories(Array.from(new Set<string>(items.map((l: any) => l.category))).sort());
-    }).catch(() => {}).finally(() => setDataLoading(false));
+      setDataLoading('loaded');
+    }).catch(() => { setDataLoading('error'); });
   }, []);
   // Hydrate filters from URL params on first mount so search from Landing/
   // NotFound actually carries through. If `type=category` and `q` matches an
@@ -373,14 +376,32 @@ export function Discover() {
           </div>
         }
 
-        {dataLoading ?
+        {dataLoading === 'loading' ?
         <div className="flex items-center justify-center min-h-[40vh]">
             <div className="animate-spin w-10 h-10 border-4 border-gold border-t-transparent rounded-full" />
           </div> :
 
+        dataLoading === 'error' ?
+        <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
+            <p className="text-navy/60 dark:text-slate-300/60 mb-4">Failed to load landmarks. Check your connection and try again.</p>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => window.location.reload()}
+              className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+            >
+              Retry
+            </motion.button>
+          </div> :
+
         viewMode === 'grid' ?
         filteredLandmarks.length === 0 ?
-        <EmptyState onReset={resetFilters} /> :
+        <EmptyState
+          icon={Search}
+          title="No landmarks match your filters"
+          description="Try adjusting your filters or search query to discover more places."
+          action={{ label: 'Reset filters', onClick: resetFilters }}
+        /> :
 
         <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -771,27 +792,6 @@ function Pagination({
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
-    </div>);
-
-}
-function EmptyState({ onReset }: {onReset: () => void;}) {
-  return (
-    <div className="bg-white dark:bg-slate-card rounded-[25px] p-12 text-center border border-dashed border-sand dark:border-slate-border">
-      <div className="w-16 h-16 mx-auto mb-4 bg-sand/40 dark:bg-slate-border rounded-full flex items-center justify-center">
-        <Search className="w-8 h-8 text-navy/40 dark:text-slate-400" />
-      </div>
-      <h3 className="text-xl font-serif font-bold text-navy dark:text-slate-100 mb-2">
-        No landmarks match your filters
-      </h3>
-      <p className="text-sm text-navy/60 dark:text-slate-400 mb-6">
-        Try adjusting your filters or search query to discover more places.
-      </p>
-      <button
-        onClick={onReset}
-        className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all">
-        
-        Reset filters
-      </button>
     </div>);
 
 }

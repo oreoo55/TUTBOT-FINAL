@@ -14,6 +14,28 @@
 import type { ApiErrorBody } from './types';
 
 const TOKEN_KEY = 'tutbot.token';
+// -- In-memory cache for frequently-read endpoints --------------
+// Simple stale-while-revalidate: cache is valid for CACHE_TTL ms.
+const CACHE_TTL = 30_000; // 30 seconds
+const requestCache = new Map<string, { data: unknown; expiresAt: number }>();
+
+function cacheGet<T>(key: string): T | null {
+  const entry = requestCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    requestCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function cacheSet(key: string, data: unknown): void {
+  requestCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL });
+}
+
+export function clearCache() {
+  requestCache.clear();
+}
 
 function getApiBase(): string {
   // Vite exposes import.meta.env.VITE_*
@@ -120,8 +142,18 @@ opts: RequestOptions = {})
 }
 
 export const api = {
-  get: <T,>(path: string, opts?: RequestOptions) =>
-  request<T>('GET', path, undefined, opts),
+  get: <T,>(path: string, opts?: RequestOptions) => {
+    const cacheKey = `GET:${path}`;
+    // Skip cache if signal is provided (likely a one-off fetch)
+    if (!opts?.signal) {
+      const cached = cacheGet<T>(cacheKey);
+      if (cached) return Promise.resolve(cached);
+    }
+    return request<T>('GET', path, undefined, opts).then(data => {
+      if (!opts?.signal) cacheSet(cacheKey, data);
+      return data;
+    });
+  },
   post: <T,>(path: string, body?: unknown, opts?: RequestOptions) =>
   request<T>('POST', path, body, opts),
   put: <T,>(path: string, body?: unknown, opts?: RequestOptions) =>

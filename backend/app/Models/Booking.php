@@ -11,7 +11,7 @@ class Booking extends Model
         'user_id', 'landmark_id', 'booking_date', 'adults', 'children',
         'subtotal', 'service_fee', 'total', 'currency', 'payment_method',
         'payment_status', 'status', 'confirmation_code', 'qr_token',
-        'payer_name', 'payer_email', 'payer_phone', 'cancelled_at', 'cancellation_requested_at', 'cancellation_reason',
+        'payer_name', 'payer_email', 'payer_phone', 'cancelled_at', 'cancellation_requested_at', 'cancellation_reason', 'receipt_path',
     ];
 
     protected function casts(): array

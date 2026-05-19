@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   service_fee         INT UNSIGNED NOT NULL DEFAULT 0,
   total               INT UNSIGNED NOT NULL,
   currency            CHAR(3) NOT NULL DEFAULT 'EGP',
-  payment_method      ENUM('card','mobile','qr','cash') NOT NULL,
+  payment_method      ENUM('card','mobile','qr','cash','vodafone','instapay') NOT NULL DEFAULT 'cash',
+  receipt_path        VARCHAR(255) NULL,                    -- file path for vodafone/instapay receipt photo
   payment_status      ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
   status              ENUM('confirmed','cancelled','completed','no_show') NOT NULL DEFAULT 'confirmed',
   confirmation_code   CHAR(6) NOT NULL UNIQUE,           -- alphanumeric uppercase

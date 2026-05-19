@@ -2,8 +2,11 @@ import React, { useState, useEffect, Fragment } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, getAuthToken } from '../lib/api';
+import { Skeleton } from '../components/Skeleton';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import QRCode from 'qrcode';
 import { downloadTicketPdf } from '../lib/pdfTicket';
+
 import {
   ChevronLeft,
   Calendar as CalendarIcon,
@@ -15,14 +18,23 @@ import {
   CheckCircle2,
   Download,
   ArrowRight,
-  MapPin } from
+  MapPin,
+  Upload,
+  X } from
 'lucide-react';
 export function Booking() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!getAuthToken()) {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
   const [landmark, setLandmark] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [bookingResult, setBookingResult] = useState<any>(null);
+  const [dataError, setDataError] = useState('');
   const [error, setError] = useState('');
   const [step, setStep] = useState(1);
   const [date, setDate] = useState('');
@@ -35,34 +47,66 @@ export function Booking() {
   });
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [vodafonePhone, setVodafonePhone] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
 
   useEffect(() => {
-    api.get<any>(`/landmarks/${id}`)
+    const abort = new AbortController();
+    api.get<any>(`/landmarks/${id}`, { signal: abort.signal })
       .then(res => {
         setLandmark(res);
+        setDataError('');
         setLoading(false);
       })
       .catch(() => {
-        navigate('/discover');
+        if (!abort.signal.aborted) {
+          setDataError('Failed to load landmark details');
+          setLoading(false);
+        }
       });
-    api.get<any>('/me').then(u => {
+    api.get<any>('/me', { signal: abort.signal }).then(u => {
       setPersonalDetails(p => ({ ...p, name: u.name || '', email: u.email || '' }));
     }).catch(() => {});
-  }, [id, navigate]);
+    return () => abort.abort();
+  }, [id]);
 
   if (loading) {
     return (
+      <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+        <Skeleton className="h-5 w-32" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-2 space-y-8">
+            <Skeleton className="h-64 rounded-[25px]" />
+            <Skeleton className="h-48 rounded-[25px]" />
+          </div>
+          <div>
+            <Skeleton className="h-72 rounded-[30px]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (dataError) {
+    return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
-        <div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+        <p className="text-navy/60 dark:text-slate-300/60 mb-4">{dataError}</p>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => window.location.reload()}
+          className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+        >
+          Retry
+        </motion.button>
       </div>
     );
   }
   if (!landmark) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center">
-        <h2 className="text-2xl font-serif font-bold text-navy mb-4">
+        <h2 className="text-2xl font-serif font-bold text-navy dark:text-slate-100 mb-4">
           Landmark not found
         </h2>
         <button
@@ -106,56 +150,90 @@ export function Booking() {
       payerPhone: personalDetails.phone,
       qrDataUrl,
       userName: personalDetails.name,
+      createdAt: bookingResult.created_at,
     }, `ticket-${bookingResult.confirmation_code || 'booking'}.pdf`);
   };
+    const toBase64 = (file: File): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = () => reject(new Error('Failed to read receipt file'));
+        reader.readAsDataURL(file);
+      });
 
-  const handleCheckout = async () => {
-    if (paymentMethod === 'vodafone') {
-      if (!/^010\d{8}$/.test(vodafonePhone)) {
-        setError('Enter a valid Vodafone Cash number starting with 010 (11 digits)');
+    const handleCheckout = async () => {
+      if (paymentMethod === 'vodafone') {
+        if (!/^010\d{8}$/.test(vodafonePhone)) {
+          setError('Enter a valid Vodafone Cash number starting with 010 (11 digits)');
+          return;
+        }
+      }
+      if ((paymentMethod === 'vodafone' || paymentMethod === 'instapay') && !receiptFile) {
+        setError('Please upload a photo of the transaction receipt.');
         return;
       }
-    }
-    setIsProcessing(true);
-    setError('');
-    try {
-      const res = await api.post<any>('/bookings', {
-        landmark_id: id,
-        booking_date: date,
-        adults,
-        children,
-        payment_method: paymentMethod,
-        payer_details: {
-          name: personalDetails.name,
-          email: personalDetails.email,
-          phone: paymentMethod === 'vodafone' ? vodafonePhone : personalDetails.phone,
-        },
-      });
-      setBookingResult(res);
-      if (res?.qr_token) {
-        QRCode.toDataURL(res.qr_token, { width: 320, margin: 2 }).then(setQrDataUrl);
+      setIsProcessing(true);
+      setError('');
+      const abortCtrl = new AbortController();
+      const timeoutId = setTimeout(() => abortCtrl.abort(), 30000);
+      try {
+        const body: any = {
+          landmark_id: id,
+          booking_date: date,
+          adults,
+          children,
+          payment_method: paymentMethod,
+          payer_details: {
+            name: personalDetails.name,
+            email: personalDetails.email,
+            phone: paymentMethod === 'vodafone' ? vodafonePhone : personalDetails.phone,
+          },
+        };
+        if (receiptFile && (paymentMethod === 'vodafone' || paymentMethod === 'instapay')) {
+          body.receipt_base64 = await toBase64(receiptFile);
+          body.receipt_extension = receiptFile.name.split('.').pop() || 'png';
+        }
+        const res = await api.post<any>('/bookings', body, { signal: abortCtrl.signal });
+        clearTimeout(timeoutId);
+        setBookingResult(res);
+        if (res?.qr_token) {
+          QRCode.toDataURL(res.qr_token, { width: 320, margin: 2 }).then(setQrDataUrl);
+        }
+        setStep(4);
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+          setError('Request timed out. The server may be busy — please try again.');
+        } else {
+          setError(err?.body?.message || err?.message || 'Booking failed. Please try again.');
+        }
+      } finally {
+        setIsProcessing(false);
       }
-      setStep(4);
-    } catch (err: any) {
-      setError(err?.body?.message || err?.message || 'Booking failed. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+    };
   return (
+    <ErrorBoundary>
     <div className="max-w-6xl mx-auto px-6 py-12 pb-24">
       {step < 4 &&
-      <button
-        onClick={handleBack}
-        className="flex items-center gap-2 text-navy/60 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 transition-colors mb-8 font-medium">
-        
+        <motion.button
+          whileHover={{ x: -3 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={handleBack}
+          className="flex items-center gap-2 text-navy/60 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 transition-colors mb-8 font-medium">
+          
           <ChevronLeft className="w-5 h-5" /> Back
-        </button>
+        </motion.button>
       }
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         {/* Main Form Area */}
-        <div className="lg:col-span-2">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="lg:col-span-2">
           {step < 4 &&
           <div className="mb-10">
               <h1 className="text-3xl md:text-4xl font-serif font-bold text-navy dark:text-slate-100 mb-4">
@@ -233,21 +311,25 @@ export function Booking() {
                         </p>
                       </div>
                       <div className="flex items-center gap-4 bg-sand/20 dark:bg-slate-border/40 rounded-xl p-1 border border-sand dark:border-slate-border">
-                        <button
+                        <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.92 }}
                         onClick={() => setAdults(Math.max(1, adults - 1))}
                         className="w-10 h-10 rounded-lg bg-white dark:bg-slate-card shadow-sm flex items-center justify-center text-navy dark:text-slate-100 font-bold hover:bg-sand/50 dark:hover:bg-slate-border transition-colors">
                         
                           -
-                        </button>
+                        </motion.button>
                         <span className="w-4 text-center font-bold text-navy dark:text-slate-100">
                           {adults}
                         </span>
-                        <button
+                        <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.92 }}
                         onClick={() => setAdults(adults + 1)}
                         className="w-10 h-10 rounded-lg bg-white dark:bg-slate-card shadow-sm flex items-center justify-center text-navy dark:text-slate-100 font-bold hover:bg-sand/50 dark:hover:bg-slate-border transition-colors">
                         
                           +
-                        </button>
+                        </motion.button>
                       </div>
                     </div>
 
@@ -263,33 +345,39 @@ export function Booking() {
                         </p>
                       </div>
                       <div className="flex items-center gap-4 bg-sand/20 dark:bg-slate-border/40 rounded-xl p-1 border border-sand dark:border-slate-border">
-                        <button
+                        <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.92 }}
                         onClick={() => setChildren(Math.max(0, children - 1))}
                         className="w-10 h-10 rounded-lg bg-white dark:bg-slate-card shadow-sm flex items-center justify-center text-navy dark:text-slate-100 font-bold hover:bg-sand/50 dark:hover:bg-slate-border transition-colors">
                         
                           -
-                        </button>
+                        </motion.button>
                         <span className="w-4 text-center font-bold text-navy dark:text-slate-100">
                           {children}
                         </span>
-                        <button
+                        <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.92 }}
                         onClick={() => setChildren(children + 1)}
                         className="w-10 h-10 rounded-lg bg-white dark:bg-slate-card shadow-sm flex items-center justify-center text-navy dark:text-slate-100 font-bold hover:bg-sand/50 dark:hover:bg-slate-border transition-colors">
                         
                           +
-                        </button>
+                        </motion.button>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <button
+                <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={handleNext}
                 disabled={!date}
                 className="w-full bg-gold text-white py-4 rounded-xl font-medium shadow-glow hover:bg-gold/90 transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 
                   Continue to Details <ArrowRight className="w-5 h-5" />
-                </button>
+                </motion.button>
               </motion.div>
             }
 
@@ -365,7 +453,9 @@ export function Booking() {
                   </div>
                 </div>
 
-                <button
+                <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={handleNext}
                 disabled={
                 !personalDetails.name ||
@@ -375,7 +465,7 @@ export function Booking() {
                 className="w-full bg-gold text-white py-4 rounded-xl font-medium shadow-glow hover:bg-gold/90 transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 
                   Continue to Payment <ArrowRight className="w-5 h-5" />
-                </button>
+                </motion.button>
               </motion.div>
             }
 
@@ -419,8 +509,10 @@ export function Booking() {
                   label: 'Cash on Arrival'
                 }].
                 map((method) =>
-                <button
+                <motion.button
                   key={method.id}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => setPaymentMethod(method.id)}
                   className={`p-6 rounded-[20px] border-2 flex flex-col items-center justify-center gap-3 transition-all ${paymentMethod === method.id ? 'border-gold bg-gold/5 shadow-md' : 'border-sand dark:border-slate-border bg-white dark:bg-slate-card hover:border-gold/30'}`}>
                   
@@ -432,7 +524,7 @@ export function Booking() {
                     
                         {method.label}
                       </span>
-                    </button>
+                    </motion.button>
                 )}
                 </div>
 
@@ -512,11 +604,56 @@ export function Booking() {
                 }
                 </div>
 
+                {(paymentMethod === 'vodafone' || paymentMethod === 'instapay') && (
+                <div className="bg-white dark:bg-slate-card rounded-[25px] p-8 shadow-soft border border-sand dark:border-slate-border mt-4">
+                  <h4 className="text-lg font-serif font-bold text-navy dark:text-slate-100 mb-4 flex items-center gap-2">
+                    <Upload className="w-5 h-5 text-royal dark:text-gold" />
+                    Upload Transaction Receipt
+                  </h4>
+                  <p className="text-sm text-navy/60 dark:text-slate-400 mb-4">
+                    Please upload a clear photo of the transaction receipt or payment confirmation so the admin can verify your payment. Your booking will remain pending until approved.
+                  </p>
+                  <div className="flex flex-col items-center gap-4">
+                    {receiptPreview ? (
+                      <div className="relative w-full max-w-sm">
+                        <img src={receiptPreview} alt="Receipt preview" className="w-full h-48 object-contain rounded-xl border border-sand dark:border-slate-border bg-sand/20" />
+                        <button
+                          onClick={() => { setReceiptFile(null); setReceiptPreview(''); }}
+                          className="absolute top-2 right-2 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full max-w-sm h-40 border-2 border-dashed border-sand dark:border-slate-border rounded-xl cursor-pointer hover:border-gold/50 hover:bg-gold/5 transition-all">
+                        <Upload className="w-8 h-8 text-navy/30 dark:text-slate-500 mb-2" />
+                        <span className="text-sm text-navy/50 dark:text-slate-400">Click to upload receipt photo</span>
+                        <span className="text-xs text-navy/40 dark:text-slate-500 mt-1">PNG, JPG or WEBP</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setReceiptFile(file);
+                              setReceiptPreview(URL.createObjectURL(file));
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+                )}
+
                 {error &&
                   <p className="text-red-500 text-sm text-center mb-4">{error}</p>
                 }
 
-                <button
+                <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={handleCheckout}
                 disabled={isProcessing}
                 className="w-full bg-gold text-white py-4 rounded-xl font-medium shadow-glow hover:bg-gold/90 transition-colors text-lg disabled:opacity-70 flex items-center justify-center gap-2">
@@ -529,7 +666,7 @@ export function Booking() {
 
                 paymentMethod === 'cash' ? 'Confirm Booking' : 'Pay ' + total + ' EGP'
                 }
-                </button>
+                </motion.button>
               </motion.div>
             }
 
@@ -613,7 +750,7 @@ export function Booking() {
               </motion.div>
             }
           </AnimatePresence>
-        </div>
+        </motion.div>
 
         {/* Sticky Order Summary */}
         {step < 4 &&
@@ -688,6 +825,7 @@ export function Booking() {
           </div>
         }
       </div>
-    </div>);
+    </div>
+    </ErrorBoundary>);
 
 }

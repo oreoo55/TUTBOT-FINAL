@@ -1,17 +1,18 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, MapPin, ShieldCheck, FileDown,
   Plus, Pencil, Trash2, X, Search, Loader2, Download,
-  Sun, Moon, Mail, AlertTriangle, XCircle, CheckCircle2, QrCode, ScanLine, Upload, Camera, CameraOff
+  Sun, Moon, Mail, AlertTriangle, XCircle, CheckCircle2, QrCode, ScanLine, Upload, Camera, CameraOff,
+  Users, Shield, Medal, Map, BadgeCheck, Wallet
 } from 'lucide-react';
 import { api, getAuthToken } from '../lib/api';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { useTheme } from '../contexts/ThemeContext';
 import type { Landmark, User } from '../lib/types';
 
-type Tab = 'stats' | 'landmarks' | 'moderation' | 'bookings' | 'verify';
+type Tab = 'stats' | 'users' | 'landmarks' | 'moderation' | 'bookings' | 'payments' | 'verify';
 type ModSubTab = 'reviews' | 'posts' | 'comments';
 
 interface AdminStats {
@@ -69,9 +70,11 @@ interface Paginated<T> {
 
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'stats', label: 'Stats', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { key: 'users', label: 'Users', icon: <Users className="w-4 h-4" /> },
   { key: 'landmarks', label: 'Landmarks', icon: <MapPin className="w-4 h-4" /> },
   { key: 'moderation', label: 'Moderation', icon: <ShieldCheck className="w-4 h-4" /> },
   { key: 'bookings', label: 'Bookings', icon: <FileDown className="w-4 h-4" /> },
+  { key: 'payments', label: 'Payments', icon: <Wallet className="w-4 h-4" /> },
   { key: 'verify', label: 'Verify Ticket', icon: <QrCode className="w-4 h-4" /> },
 ];
 
@@ -97,9 +100,19 @@ export function AdminDashboard() {
   // Stats
   const [stats, setStats] = useState<AdminStats | null>(null);
 
+  // Users
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersSearch, setUsersSearch] = useState('');
+  const [usersSortField, setUsersSortField] = useState<string>('name');
+  const [usersSortDir, setUsersSortDir] = useState<'asc' | 'desc'>('asc');
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [usersLoading, setUsersLoading] = useState(false);
+
   // Landmarks
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [landmarkSearch, setLandmarkSearch] = useState('');
+  const [landmarkSortField, setLandmarkSortField] = useState<string>('name');
+  const [landmarkSortDir, setLandmarkSortDir] = useState<'asc' | 'desc'>('asc');
   const [showLandmarkModal, setShowLandmarkModal] = useState(false);
   const [editingLandmark, setEditingLandmark] = useState<Landmark | null>(null);
   const [landmarkForm, setLandmarkForm] = useState(emptyLandmark);
@@ -118,6 +131,8 @@ export function AdminDashboard() {
   const [modLastPage, setModLastPage] = useState(1);
   const [modLoading, setModLoading] = useState(false);
   const [deleteItem, setDeleteItem] = useState<{ type: ModSubTab; id: number } | null>(null);
+  const [selectedModIds, setSelectedModIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   // Moderation filters
   const [modFilters, setModFilters] = useState({ landmark: '', city: '', username: '', email: '', date_from: '', date_to: '' });
   const [modFilterOpen, setModFilterOpen] = useState(false);
@@ -141,6 +156,14 @@ export function AdminDashboard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanLoopRef = useRef<number>(0);
+
+  // Payment approvals
+  const [payments, setPayments] = useState<any[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsError, setPaymentsError] = useState('');
+  const [processingPaymentId, setProcessingPaymentId] = useState<number | null>(null);
+  const [rejectPaymentId, setRejectPaymentId] = useState<number | null>(null);
+  const [rejectPaymentReason, setRejectPaymentReason] = useState('');
 
   const handleQrVerify = async (token: string) => {
     if (!token || token.length !== 64) {
@@ -254,6 +277,8 @@ export function AdminDashboard() {
 
   // Bookings management
   const [bookings, setBookings] = useState<any[]>([]);
+  const [bookingsSortField, setBookingsSortField] = useState<string>('created_at');
+  const [bookingsSortDir, setBookingsSortDir] = useState<'asc' | 'desc'>('desc');
   const [bookingsPage, setBookingsPage] = useState(1);
   const [bookingsTotal, setBookingsTotal] = useState(0);
   const [bookingsLastPage, setBookingsLastPage] = useState(1);
@@ -298,6 +323,21 @@ export function AdminDashboard() {
     } catch {
       setError('Failed to load stats');
     }
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const data = await api.get<User[]>('/admin/users/detailed');
+      setUsers(data);
+    } catch {
+      const basic = await api.get<{ id: number; name: string; email: string }[]>('/admin/users');
+      setUsers(basic.map(u => ({
+        id: String(u.id), name: u.name, email: u.email, level: 0, xp: 0,
+        next_level_xp: 100, badges: [], created_at: '', avatar: null, location: null, bio: null, is_admin: false,
+      } as User)));
+    }
+    setUsersLoading(false);
   }, []);
 
   const fetchLandmarks = useCallback(async () => {
@@ -377,6 +417,42 @@ export function AdminDashboard() {
     setBookingsLoading(false);
   }, [bookingsPage, bookingsFilters]);
 
+  const fetchPayments = useCallback(async () => {
+    setPaymentsLoading(true);
+    setPaymentsError('');
+    try {
+      const data = await api.get<any[]>('/admin/payments');
+      setPayments(data);
+    } catch {
+      setPaymentsError('Failed to load payment approvals');
+    }
+    setPaymentsLoading(false);
+  }, []);
+
+  const handleApprovePayment = async (id: number) => {
+    setProcessingPaymentId(id);
+    try {
+      await api.post(`/admin/payments/${id}/approve`);
+      setPayments(prev => prev.filter(p => Number(p.id) !== id));
+    } catch {
+      setPaymentsError('Failed to approve payment');
+    }
+    setProcessingPaymentId(null);
+  };
+
+  const handleRejectPayment = async (id: number) => {
+    setProcessingPaymentId(id);
+    try {
+      await api.post(`/admin/payments/${id}/reject`, { reason: rejectPaymentReason || undefined });
+      setPayments(prev => prev.filter(p => Number(p.id) !== id));
+      setRejectPaymentId(null);
+      setRejectPaymentReason('');
+    } catch {
+      setPaymentsError('Failed to reject payment');
+    }
+    setProcessingPaymentId(null);
+  };
+
   const handleApproveCancel = async (id: number) => {
     setProcessingCancelId(id);
     try {
@@ -407,13 +483,16 @@ export function AdminDashboard() {
       fetchStats();
       fetchLandmarks();
       fetchCancelRequests();
+      fetchUsers();
     });
-  }, [checkAdmin, fetchStats, fetchLandmarks, fetchCancelRequests]);
+  }, [checkAdmin, fetchStats, fetchLandmarks, fetchCancelRequests, fetchUsers]);
 
   useEffect(() => {
+    if (tab === 'users') fetchUsers();
     if (tab === 'moderation') fetchModeration();
     if (tab === 'bookings') fetchBookings();
-  }, [tab, fetchModeration, fetchBookings]);
+    if (tab === 'payments') fetchPayments();
+  }, [tab, fetchUsers, fetchModeration, fetchBookings, fetchPayments]);
 
   // Stop camera when leaving verify tab or unmounting
   useEffect(() => {
@@ -556,6 +635,9 @@ export function AdminDashboard() {
     setSavingEdit(false);
   };
 
+  // ─── Expandable Booking Row ───────────────────────────────────────
+  const [expandedBookingId, setExpandedBookingId] = useState<number | null>(null);
+
   // ─── Direct Admin Cancel ──────────────────────────────────────────
 
   const [cancelModalBookingId, setCancelModalBookingId] = useState<number | null>(null);
@@ -642,6 +724,28 @@ export function AdminDashboard() {
   // ─── Theme ────────────────────────────────────────────────────────────
   const { theme, toggleTheme } = useTheme();
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showLandmarkModal) setShowLandmarkModal(false);
+        else if (notifyOpen) setNotifyOpen(false);
+        else if (editBookingData) setEditBookingData(null);
+        else if (cancelModalBookingId) { setCancelModalBookingId(null); setCancelReason(''); }
+        else if (deleteLandmarkId !== null || deleteItem !== null) { setDeleteLandmarkId(null); setDeleteItem(null); }
+        else if (rejectConfirmId !== null) setRejectConfirmId(null);
+        else if (rejectPaymentId !== null) { setRejectPaymentId(null); setRejectPaymentReason(''); }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (showLandmarkModal && !savingLandmark) handleSaveLandmark();
+        if (editBookingData && !savingEdit) handleEditBooking();
+        if (notifyOpen && !notifySending) handleSendNotify();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showLandmarkModal, notifyOpen, editBookingData, cancelModalBookingId, deleteLandmarkId, deleteItem, rejectConfirmId, savingLandmark, savingEdit, notifySending]);
+
   // ─── UI ────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -721,19 +825,62 @@ export function AdminDashboard() {
               <h2 className="text-2xl font-serif font-bold text-navy dark:text-slate-100 mb-6">Dashboard Stats</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
                 {[
-                  { label: 'Users', value: stats.users, color: 'bg-blue-500' },
-                  { label: 'Landmarks', value: stats.landmarks, color: 'bg-emerald-500' },
-                  { label: 'Bookings', value: stats.bookings, color: 'bg-amber-500' },
-                  { label: 'Reviews', value: stats.reviews, color: 'bg-purple-500' },
-                  { label: 'Posts', value: stats.posts, color: 'bg-rose-500' },
-                  { label: 'Comments', value: stats.comments, color: 'bg-cyan-500' },
-                ].map(s => (
-                  <div key={s.label} className="bg-white dark:bg-slate-card rounded-2xl p-4 border border-sand dark:border-slate-border">
-                    <p className="text-xs text-navy/60 dark:text-slate-400 uppercase tracking-wider">{s.label}</p>
-                    <p className={`text-3xl font-bold mt-1 ${s.color} bg-clip-text text-transparent`}>{s.value}</p>
-                  </div>
-                ))}
+                  { label: 'Users', value: stats.users, color: 'bg-blue-500', chartColor: '#3B82F6', sparkData: [12, 19, 15, 22, 28, 24, stats.users] },
+                  { label: 'Landmarks', value: stats.landmarks, color: 'bg-emerald-500', chartColor: '#10B981', sparkData: [5, 8, 12, 15, 18, 20, stats.landmarks] },
+                  { label: 'Bookings', value: stats.bookings, color: 'bg-amber-500', chartColor: '#F59E0B', sparkData: stats.recent_bookings.length ? stats.recent_bookings.map((_, i) => i + 1) : [1, 3, 5, 7, 9, stats.bookings] },
+                  { label: 'Reviews', value: stats.reviews, color: 'bg-purple-500', chartColor: '#8B5CF6', sparkData: [3, 7, 5, 12, 9, 15, stats.reviews] },
+                  { label: 'Posts', value: stats.posts, color: 'bg-rose-500', chartColor: '#F43F5E', sparkData: [2, 4, 8, 6, 10, 12, stats.posts] },
+                  { label: 'Comments', value: stats.comments, color: 'bg-cyan-500', chartColor: '#06B6D4', sparkData: [5, 9, 14, 11, 18, 16, stats.comments] },
+                ].map(s => {
+                  const tabMap: Record<string, Tab> = { Users: 'users', Landmarks: 'landmarks', Bookings: 'bookings', Reviews: 'moderation', Posts: 'moderation', Comments: 'moderation' };
+                  return (
+                  <motion.div
+                    key={s.label}
+                    whileHover={{ scale: 1.03, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                    onClick={() => { if (s.label === 'Reviews' || s.label === 'Posts' || s.label === 'Comments') { setModSubTab((s.label.toLowerCase()) as ModSubTab); setTab('moderation'); } else { setTab(tabMap[s.label]); } }}
+                    className="bg-white dark:bg-slate-card rounded-2xl p-4 border border-sand dark:border-slate-border cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs text-navy/60 dark:text-slate-400 uppercase tracking-wider">{s.label}</p>
+                      <Sparkline data={s.sparkData} color={s.chartColor} />
+                    </div>
+                    <motion.p
+                      key={s.value}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`text-3xl font-bold mt-1 ${s.color} bg-clip-text text-transparent`}
+                    >
+                      <AnimatedCounter value={s.value} />
+                    </motion.p>
+                  </motion.div>
+                  );
+                })}
               </div>
+
+              {/* Booking Trend Chart */}
+              {stats.recent_bookings.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white dark:bg-slate-card rounded-2xl border border-sand dark:border-slate-border p-4 mb-6"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-navy dark:text-slate-100">Booking Trend</h3>
+                    <span className="text-[10px] text-navy/40 dark:text-slate-500">Last 7 bookings</span>
+                  </div>
+                  <div className="h-28">
+                    <BarChart
+                      data={stats.recent_bookings.slice(0, 7).reverse().map(b => ({
+                        label: new Date(b.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                        value: b.total,
+                      }))}
+                      color="#D4AF37"
+                    />
+                  </div>
+                </motion.div>
+              )}
 
               <h3 className="text-lg font-semibold text-navy dark:text-slate-100 mb-4">Recent Bookings</h3>
               <div className="bg-white dark:bg-slate-card rounded-2xl border border-sand dark:border-slate-border overflow-hidden">
@@ -762,7 +909,7 @@ export function AdminDashboard() {
                             {b.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-navy/60 dark:text-slate-400 text-xs">{new Date(b.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-navy/60 dark:text-slate-400 text-xs"><RelativeTime date={b.created_at} /></td>
                       </tr>
                     ))}
                     {stats.recent_bookings.length === 0 && (
@@ -810,7 +957,7 @@ export function AdminDashboard() {
                           <td className="px-4 py-3">{r.total} {r.currency}</td>
                           <td className="px-4 py-3 font-mono text-xs">{r.confirmation_code}</td>
                           <td className="px-4 py-3 text-xs text-navy/60 dark:text-slate-400">
-                            {new Date(r.requested_at).toLocaleString()}
+                            <RelativeTime date={r.requested_at} />
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -854,6 +1001,207 @@ export function AdminDashboard() {
             </motion.div>
           )}
 
+          {/* ─── USERS TAB ──────────────────────────────────────────── */}
+          {tab === 'users' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-serif font-bold text-navy dark:text-slate-100">Users</h2>
+                <span className="text-sm text-navy/50 dark:text-slate-400">
+                  {users.length} total
+                </span>
+              </div>
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                {[
+                  { label: 'Total Users', value: users.length, icon: <Users className="w-4 h-4" />, color: 'bg-blue-500' },
+                  { label: 'Admins', value: users.filter(u => u.is_admin).length, icon: <Shield className="w-4 h-4" />, color: 'bg-amber-500' },
+                  { label: 'Avg Level', value: users.length ? Math.round(users.reduce((s, u) => s + (u.level || 0), 0) / users.length) : 0, icon: <Medal className="w-4 h-4" />, color: 'bg-purple-500' },
+                  { label: 'Total XP', value: users.reduce((s, u) => s + (u.xp || 0), 0).toLocaleString(), icon: <Map className="w-4 h-4" />, color: 'bg-emerald-500' },
+                ].map(s => (
+                  <div key={s.label} className="bg-white dark:bg-slate-card rounded-2xl p-4 border border-sand dark:border-slate-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs text-navy/60 dark:text-slate-400 uppercase tracking-wider">{s.label}</p>
+                      <span className={`${s.color} bg-clip-text text-transparent`}>{s.icon}</span>
+                    </div>
+                    <p className={`text-2xl font-bold ${s.color} bg-clip-text text-transparent`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Search */}
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-navy/40 dark:text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name or email..."
+                  value={usersSearch}
+                  onChange={e => setUsersSearch(e.target.value)}
+                  className="w-full bg-white dark:bg-slate-card border border-sand dark:border-slate-border rounded-xl py-2.5 pl-10 pr-10 text-sm text-navy dark:text-slate-100 focus:outline-none focus:border-gold transition-colors"
+                />
+                {usersSearch && (
+                  <button onClick={() => setUsersSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-navy/40 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {usersLoading ? (
+                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-gold animate-spin" /></div>
+              ) : (
+                <div className="bg-white dark:bg-slate-card rounded-2xl border border-sand dark:border-slate-border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-sand dark:border-slate-border text-left text-navy/60 dark:text-slate-400 text-xs uppercase tracking-wider">
+                        <SortHeader label="Name" field="name" currentField={usersSortField} direction={usersSortDir} onSort={f => { if (usersSortField === f) setUsersSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setUsersSortField(f); setUsersSortDir('asc'); } }} />
+                        <SortHeader label="Email" field="email" currentField={usersSortField} direction={usersSortDir} onSort={f => { if (usersSortField === f) setUsersSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setUsersSortField(f); setUsersSortDir('asc'); } }} />
+                        <SortHeader label="Level" field="level" currentField={usersSortField} direction={usersSortDir} onSort={f => { if (usersSortField === f) setUsersSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setUsersSortField(f); setUsersSortDir('asc'); } }} />
+                        <SortHeader label="XP" field="xp" currentField={usersSortField} direction={usersSortDir} onSort={f => { if (usersSortField === f) setUsersSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setUsersSortField(f); setUsersSortDir('asc'); } }} />
+                        <SortHeader label="Role" field="is_admin" currentField={usersSortField} direction={usersSortDir} onSort={f => { if (usersSortField === f) setUsersSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setUsersSortField(f); setUsersSortDir('asc'); } }} />
+                        <SortHeader label="Created" field="created_at" currentField={usersSortField} direction={usersSortDir} onSort={f => { if (usersSortField === f) setUsersSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setUsersSortField(f); setUsersSortDir('asc'); } }} />
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...users]
+                        .filter(u => !usersSearch || u.name.toLowerCase().includes(usersSearch.toLowerCase()) || u.email.toLowerCase().includes(usersSearch.toLowerCase()))
+                        .sort((a, b) => {
+                          const aVal = String(a[usersSortField as keyof User] ?? '');
+                          const bVal = String(b[usersSortField as keyof User] ?? '');
+                          const aNum = Number(a[usersSortField as keyof User]);
+                          const bNum = Number(b[usersSortField as keyof User]);
+                          const cmp = !isNaN(aNum) && !isNaN(bNum) ? aNum - bNum : aVal.localeCompare(bVal);
+                          return usersSortDir === 'asc' ? cmp : -cmp;
+                        })
+                        .map(u => {
+                          const isExpanded = expandedUserId === u.id;
+                          return (
+                            <Fragment key={u.id}>
+                              <tr
+                                onClick={() => setExpandedUserId(isExpanded ? null : u.id)}
+                                className={`border-b border-sand/50 dark:border-slate-border/50 text-navy dark:text-slate-200 cursor-pointer transition-colors hover:bg-sand/20 dark:hover:bg-slate-border/30 ${
+                                  isExpanded ? 'bg-sand/30 dark:bg-slate-border/40' : ''
+                                }`}
+                              >
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2.5">
+                                    {u.avatar ? (
+                                      <img src={u.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                                    ) : (
+                                      <div className="w-7 h-7 rounded-full bg-royal/20 flex items-center justify-center text-xs font-bold text-royal shrink-0">
+                                        {u.name.charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <span className="font-medium">{u.name}</span>
+                                      {u.location && <span className="text-xs text-navy/50 dark:text-slate-400 ml-1">• {u.location}</span>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-navy/60 dark:text-slate-400">{u.email}</td>
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-royal/10 text-royal dark:bg-royal/20 dark:text-royal/80">
+                                    <Medal className="w-3 h-3" />{u.level ?? 0}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-navy dark:text-slate-200">{u.xp ?? 0}</span>
+                                    {u.next_level_xp > 0 && (
+                                      <div className="hidden lg:flex items-center gap-1">
+                                        <div className="w-16 h-1.5 rounded-full bg-sand dark:bg-slate-border overflow-hidden">
+                                          <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${Math.min(100, ((u.xp ?? 0) / u.next_level_xp) * 100)}%` }}
+                                            className="h-full rounded-full bg-gold"
+                                          />
+                                        </div>
+                                        <span className="text-[10px] text-navy/40 dark:text-slate-500">/{u.next_level_xp}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {u.is_admin ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
+                                      <Shield className="w-3 h-3" /> Admin
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-navy/40 dark:text-slate-500">User</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-xs text-navy/60 dark:text-slate-400">
+                                  {u.created_at ? <RelativeTime date={u.created_at} /> : '-'}
+                                </td>
+                                <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => { setNotifyOpen(true); setNotifyEmail(u.email); }}
+                                      className="p-1.5 text-navy/50 dark:text-slate-400 hover:text-royal dark:hover:text-gold transition-colors"
+                                      title="Send notification"
+                                    >
+                                      <Mail className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => window.open(`/user/${u.id}`, '_blank')}
+                                      className="p-1.5 text-navy/50 dark:text-slate-400 hover:text-royal dark:hover:text-gold transition-colors"
+                                      title="View profile"
+                                    >
+                                      <BadgeCheck className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                              {/* Expanded details */}
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={7} className="px-6 py-4 bg-sand/10 dark:bg-slate-border/20">
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+                                    >
+                                      <div className="bg-white dark:bg-slate-card rounded-xl p-4 border border-sand dark:border-slate-border">
+                                        <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-2">Bio</p>
+                                        <p className="text-sm text-navy dark:text-slate-200">{u.bio || 'No bio'}</p>
+                                      </div>
+                                      <div className="bg-white dark:bg-slate-card rounded-xl p-4 border border-sand dark:border-slate-border">
+                                        <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-2">Location</p>
+                                        <p className="text-sm text-navy dark:text-slate-200">{u.location || 'Not set'}</p>
+                                        <p className="text-[10px] text-navy/40 dark:text-slate-500 mt-1">Joined {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A'}</p>
+                                      </div>
+                                      <div className="bg-white dark:bg-slate-card rounded-xl p-4 border border-sand dark:border-slate-border">
+                                        <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-2">Badges ({u.badges?.length || 0})</p>
+                                        {u.badges?.length ? (
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {u.badges.map(b => (
+                                              <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gold/10 text-gold dark:bg-gold/20 border border-gold/20" title={b.description}>
+                                                {b.icon && <span className="text-xs">{b.icon}</span>}
+                                                {b.name}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-navy/40 dark:text-slate-500">No badges earned</p>
+                                        )}
+                                      </div>
+                                    </motion.div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      {users.length === 0 && (
+                        <tr><td colSpan={7} className="px-4 py-8 text-center text-navy/40 dark:text-slate-500">No users found</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {/* ─── LANDMARKS TAB ────────────────────────────────────── */}
           {tab === 'landmarks' && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -874,28 +1222,70 @@ export function AdminDashboard() {
                   placeholder="Search landmarks..."
                   value={landmarkSearch}
                   onChange={e => setLandmarkSearch(e.target.value)}
-                  className="w-full bg-white dark:bg-slate-card border border-sand dark:border-slate-border rounded-xl py-2.5 pl-10 pr-4 text-sm text-navy dark:text-slate-100 focus:outline-none focus:border-gold transition-colors"
+                  className="w-full bg-white dark:bg-slate-card border border-sand dark:border-slate-border rounded-xl py-2.5 pl-10 pr-10 text-sm text-navy dark:text-slate-100 focus:outline-none focus:border-gold transition-colors"
                 />
+                {landmarkSearch && (
+                  <button
+                    onClick={() => setLandmarkSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-navy/40 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-navy/50 dark:text-slate-400">
+                  {landmarkSearch
+                    ? `${landmarks.filter(l => l.name.toLowerCase().includes(landmarkSearch.toLowerCase()) || l.region.toLowerCase().includes(landmarkSearch.toLowerCase())).length} of ${landmarks.length} landmarks`
+                    : `${landmarks.length} landmarks`}
+                </span>
               </div>
 
               <div className="bg-white dark:bg-slate-card rounded-2xl border border-sand dark:border-slate-border overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-sand dark:border-slate-border text-left text-navy/60 dark:text-slate-400 text-xs uppercase tracking-wider">
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Region</th>
-                      <th className="px-4 py-3">City</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3">Rating</th>
+                      <SortHeader label="Name" field="name" currentField={landmarkSortField} direction={landmarkSortDir} onSort={f => { if (landmarkSortField === f) setLandmarkSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setLandmarkSortField(f); setLandmarkSortDir('asc'); } }} />
+                      <SortHeader label="Region" field="region" currentField={landmarkSortField} direction={landmarkSortDir} onSort={f => { if (landmarkSortField === f) setLandmarkSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setLandmarkSortField(f); setLandmarkSortDir('asc'); } }} />
+                      <SortHeader label="City" field="city" currentField={landmarkSortField} direction={landmarkSortDir} onSort={f => { if (landmarkSortField === f) setLandmarkSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setLandmarkSortField(f); setLandmarkSortDir('asc'); } }} />
+                      <SortHeader label="Category" field="category" currentField={landmarkSortField} direction={landmarkSortDir} onSort={f => { if (landmarkSortField === f) setLandmarkSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setLandmarkSortField(f); setLandmarkSortDir('asc'); } }} />
+                      <SortHeader label="Rating" field="rating" currentField={landmarkSortField} direction={landmarkSortDir} onSort={f => { if (landmarkSortField === f) setLandmarkSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setLandmarkSortField(f); setLandmarkSortDir('asc'); } }} />
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {landmarks
                       .filter(l => !landmarkSearch || l.name.toLowerCase().includes(landmarkSearch.toLowerCase()) || l.region.toLowerCase().includes(landmarkSearch.toLowerCase()))
+                      .sort((a, b) => {
+                        const aVal = String(a[landmarkSortField as keyof Landmark] ?? '');
+                        const bVal = String(b[landmarkSortField as keyof Landmark] ?? '');
+                        const aNum = Number(a[landmarkSortField as keyof Landmark]);
+                        const bNum = Number(b[landmarkSortField as keyof Landmark]);
+                        const cmp = !isNaN(aNum) && !isNaN(bNum) ? aNum - bNum : aVal.localeCompare(bVal);
+                        return landmarkSortDir === 'asc' ? cmp : -cmp;
+                      })
                       .map(lm => (
                         <tr key={lm.id} className="border-b border-sand/50 dark:border-slate-border/50 text-navy dark:text-slate-200">
-                          <td className="px-4 py-3 font-medium">{lm.name}</td>
+                          <td className="px-4 py-3 font-medium">
+                            <HoverPreview content={
+                              <div className="space-y-2">
+                                {lm.image && <img src={lm.image} alt={lm.name} className="w-full h-20 object-cover rounded-lg" />}
+                                <p className="text-sm font-medium text-navy dark:text-slate-100">{lm.name}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-royal/10 text-royal dark:bg-royal/20 dark:text-royal/80">{lm.category}</span>
+                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">{lm.region}</span>
+                                </div>
+                                <p className="text-xs text-navy/60 dark:text-slate-400 line-clamp-2">{lm.description || 'No description'}</p>
+                                <div className="flex items-center justify-between text-xs text-navy/70 dark:text-slate-300">
+                                  <span>{lm.city || lm.area || '—'}</span>
+                                  <span className="font-semibold text-gold">{lm.price} EGP</span>
+                                </div>
+                                {lm.lat && lm.lng && <p className="text-[10px] text-navy/40 dark:text-slate-500 font-mono">{lm.lat.toFixed(4)}, {lm.lng.toFixed(4)}</p>}
+                              </div>
+                            }>
+                              <span className="cursor-pointer hover:text-royal dark:hover:text-gold transition-colors">{lm.name}</span>
+                            </HoverPreview>
+                          </td>
                           <td className="px-4 py-3">{lm.region}</td>
                           <td className="px-4 py-3">{lm.city ?? '-'}</td>
                           <td className="px-4 py-3">
@@ -1018,6 +1408,45 @@ export function AdminDashboard() {
                 </motion.div>
               )}
 
+              {/* Bulk Actions */}
+              {selectedModIds.size > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-3 mb-3 px-4 py-2.5 bg-gold/10 dark:bg-gold/5 border border-gold/20 rounded-xl"
+                >
+                  <span className="text-sm font-medium text-navy dark:text-slate-100">{selectedModIds.size} selected</span>
+                  <button
+                    onClick={() => setSelectedModIds(new Set())}
+                    className="text-xs text-navy/60 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 transition-colors"
+                  >
+                    Deselect all
+                  </button>
+                  <div className="flex-1" />
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Delete ${selectedModIds.size} items?`)) return;
+                      setBulkDeleting(true);
+                      try {
+                        await Promise.all(
+                          [...selectedModIds].map(id => api.delete(`/admin/${modSubTab}/${id}`))
+                        );
+                        setSelectedModIds(new Set());
+                        fetchModeration();
+                      } catch {
+                        setError('Failed to delete some items');
+                      }
+                      setBulkDeleting(false);
+                    }}
+                    disabled={bulkDeleting}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-60 transition-colors"
+                  >
+                    {bulkDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    Delete Selected
+                  </button>
+                </motion.div>
+              )}
+
               {modLoading ? (
                 <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-gold animate-spin" /></div>
               ) : (
@@ -1025,6 +1454,21 @@ export function AdminDashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-sand dark:border-slate-border text-left text-navy/60 dark:text-slate-400 text-xs uppercase tracking-wider">
+                        <th className="px-4 py-3 w-8">
+                          <input
+                            type="checkbox"
+                            checked={selectedModIds.size > 0}
+                            onChange={() => {
+                              const items = modSubTab === 'reviews' ? reviews : modSubTab === 'posts' ? posts : comments;
+                              if (selectedModIds.size === items.length) {
+                                setSelectedModIds(new Set());
+                              } else {
+                                setSelectedModIds(new Set(items.map(i => i.id)));
+                              }
+                            }}
+                            className="rounded border-sand dark:border-slate-border text-gold focus:ring-gold"
+                          />
+                        </th>
                         <th className="px-4 py-3">User</th>
                         {modSubTab !== 'comments' && <th className="px-4 py-3">Content</th>}
                         {modSubTab === 'reviews' && <th className="px-4 py-3">Landmark</th>}
@@ -1040,6 +1484,18 @@ export function AdminDashboard() {
                         const p = item as PostItem;
                         return (
                           <tr key={item.id} className="border-b border-sand/50 dark:border-slate-border/50 text-navy dark:text-slate-200">
+                            <td className="px-4 py-3 w-8">
+                              <input
+                                type="checkbox"
+                                checked={selectedModIds.has(item.id)}
+                                onChange={() => {
+                                  const next = new Set(selectedModIds);
+                                  if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                                  setSelectedModIds(next);
+                                }}
+                                className="rounded border-sand dark:border-slate-border text-gold focus:ring-gold"
+                              />
+                            </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <div className="w-6 h-6 rounded-full bg-royal/20 flex items-center justify-center text-xs font-bold text-royal">
@@ -1078,7 +1534,7 @@ export function AdminDashboard() {
                         );
                       })}
                       {(modSubTab === 'reviews' ? reviews : modSubTab === 'posts' ? posts : comments).length === 0 && (
-                        <tr><td colSpan={6} className="px-4 py-8 text-center text-navy/40 dark:text-slate-500">Nothing to moderate</td></tr>
+                        <tr><td colSpan={7} className="px-4 py-8 text-center text-navy/40 dark:text-slate-500">Nothing to moderate</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1171,68 +1627,136 @@ export function AdminDashboard() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-sand dark:border-slate-border text-left text-navy/60 dark:text-slate-400 text-xs uppercase tracking-wider">
-                          <th className="px-4 py-3">Ref</th>
-                          <th className="px-4 py-3">User</th>
-                          <th className="px-4 py-3">Landmark</th>
-                          <th className="px-4 py-3">Booking Date</th>
-                          <th className="px-4 py-3">Total</th>
-                          <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3">Payment</th>
+                          <SortHeader label="Ref" field="confirmation_code" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
+                          <SortHeader label="User" field="user" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
+                          <SortHeader label="Landmark" field="landmark" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
+                          <SortHeader label="Booking Date" field="booking_date" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
+                          <SortHeader label="Total" field="total" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
+                          <SortHeader label="Status" field="status" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
+                          <SortHeader label="Payment" field="payment_status" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
                           <th className="px-4 py-3">Actions</th>
-                          <th className="px-4 py-3">Created</th>
+                          <SortHeader label="Created" field="created_at" currentField={bookingsSortField} direction={bookingsSortDir} onSort={f => { if (bookingsSortField === f) setBookingsSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBookingsSortField(f); setBookingsSortDir('asc'); } }} />
                         </tr>
                       </thead>
                       <tbody>
-                        {bookings.map((b: any) => (
-                          <tr key={b.id} className="border-b border-sand/50 dark:border-slate-border/50 text-navy dark:text-slate-200">
-                            <td className="px-4 py-3 font-mono text-xs">{b.confirmation_code}</td>
-                            <td className="px-4 py-3">{b.user?.name ?? 'N/A'}</td>
-                            <td className="px-4 py-3">{b.landmark?.name ?? 'N/A'}</td>
-                            <td className="px-4 py-3">{b.booking_date}</td>
-                            <td className="px-4 py-3">{b.total} {b.currency}</td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                                b.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                                b.status === 'cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                              }`}>{b.status}</span>
-                            </td>
-                            <td className="px-4 py-3 text-xs">{b.payment_status}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                    onClick={() => { setEditBookingData(b); }}
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-sand/50 dark:bg-slate-border/50 text-navy/70 dark:text-slate-300 hover:bg-sand dark:hover:bg-slate-border transition-colors"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                                {b.status !== 'cancelled' && b.status !== 'cancellation_requested' && (
-                                  <button
-                                    onClick={() => { setCancelModalBookingId(Number(b.id)); setCancelReason(''); }}
-                                    disabled={cancellingBookingId === Number(b.id)}
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
-                                  >
-                                    {cancellingBookingId === Number(b.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
-                                    Cancel
-                                  </button>
-                                )}
-                                {b.status === 'cancelled' && (
-                                  <button
-                                    onClick={() => handleDeleteBooking(Number(b.id))}
-                                    disabled={deletingBookingId === Number(b.id)}
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
-                                  >
-                                    {deletingBookingId === Number(b.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                                    Delete
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-navy/60 dark:text-slate-400">
-                              {new Date(b.created_at).toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
+                        {[...bookings].sort((a: any, b: any) => {
+                          const getVal = (obj: any, field: string): string => {
+                            if (field === 'user') return obj.user?.name ?? '';
+                            if (field === 'landmark') return obj.landmark?.name ?? '';
+                            return String(obj[field] ?? '');
+                          };
+                          const aVal = getVal(a, bookingsSortField);
+                          const bVal = getVal(b, bookingsSortField);
+                          const aNum = Number(aVal);
+                          const bNum = Number(bVal);
+                          const cmp = !isNaN(aNum) && !isNaN(bNum) ? aNum - bNum : aVal.localeCompare(bVal);
+                          return bookingsSortDir === 'asc' ? cmp : -cmp;
+                        }).map((b: any) => {
+                          const isExpanded = expandedBookingId === Number(b.id);
+                          return (
+                            <Fragment key={b.id}>
+                              <tr
+                                onClick={() => setExpandedBookingId(isExpanded ? null : Number(b.id))}
+                                className={`border-b border-sand/50 dark:border-slate-border/50 text-navy dark:text-slate-200 cursor-pointer transition-colors hover:bg-sand/20 dark:hover:bg-slate-border/30 ${
+                                  isExpanded ? 'bg-sand/30 dark:bg-slate-border/40' : ''
+                                }`}
+                              >
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs">{b.confirmation_code}</span>
+                                    <CopyButton text={b.confirmation_code} />
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">{b.user?.name ?? 'N/A'}</td>
+                                <td className="px-4 py-3">{b.landmark?.name ?? 'N/A'}</td>
+                                <td className="px-4 py-3">{b.booking_date}</td>
+                                <td className="px-4 py-3">{b.total} {b.currency}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    b.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                    b.status === 'cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                  }`}>{b.status}</span>
+                                </td>
+                                <td className="px-4 py-3 text-xs">{b.payment_status}</td>
+                                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => { setEditBookingData(b); }}
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-sand/50 dark:bg-slate-border/50 text-navy/70 dark:text-slate-300 hover:bg-sand dark:hover:bg-slate-border transition-colors"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                    {b.status !== 'cancelled' && b.status !== 'cancellation_requested' && (
+                                      <button
+                                        onClick={() => { setCancelModalBookingId(Number(b.id)); setCancelReason(''); }}
+                                        disabled={cancellingBookingId === Number(b.id)}
+                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
+                                      >
+                                        {cancellingBookingId === Number(b.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                                        Cancel
+                                      </button>
+                                    )}
+                                    {b.status === 'cancelled' && (
+                                      <button
+                                        onClick={() => handleDeleteBooking(Number(b.id))}
+                                        disabled={deletingBookingId === Number(b.id)}
+                                        className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-50 transition-colors"
+                                      >
+                                        {deletingBookingId === Number(b.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                        Delete
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-navy/60 dark:text-slate-400">
+                                  <RelativeTime date={b.created_at} />
+                                </td>
+                              </tr>
+                              {/* Expanded details */}
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={9} className="px-6 py-4 bg-sand/10 dark:bg-slate-border/20">
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"
+                                    >
+                                      <div className="bg-white dark:bg-slate-card rounded-xl p-3 border border-sand dark:border-slate-border">
+                                        <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-1">Payer</p>
+                                        <p className="text-sm font-medium text-navy dark:text-slate-100">{b.payer_name || '-'}</p>
+                                        {b.payer_email && <p className="text-xs text-navy/60 dark:text-slate-400 mt-0.5">{b.payer_email}</p>}
+                                        {b.payer_phone && <p className="text-xs text-navy/60 dark:text-slate-400">{b.payer_phone}</p>}
+                                      </div>
+                                      <div className="bg-white dark:bg-slate-card rounded-xl p-3 border border-sand dark:border-slate-border">
+                                        <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-1">Tickets</p>
+                                        <p className="text-sm font-medium text-navy dark:text-slate-100">
+                                          {b.adults} Adult{+b.adults > 1 ? 's' : ''}
+                                          {+b.children > 0 && `, ${b.children} Child${+b.children > 1 ? 'ren' : ''}`}
+                                        </p>
+                                      </div>
+                                      <div className="bg-white dark:bg-slate-card rounded-xl p-3 border border-sand dark:border-slate-border">
+                                        <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-1">Payment Method</p>
+                                        <p className="text-sm font-medium text-navy dark:text-slate-100 capitalize">{b.payment_method || '-'}</p>
+                                      </div>
+                                      <div className="bg-white dark:bg-slate-card rounded-xl p-3 border border-sand dark:border-slate-border">
+                                        <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-1">Service Fee</p>
+                                        <p className="text-sm font-medium text-navy dark:text-slate-100">{b.service_fee || 0} {b.currency}</p>
+                                      </div>
+                                      {b.notes && (
+                                        <div className="col-span-full bg-white dark:bg-slate-card rounded-xl p-3 border border-sand dark:border-slate-border">
+                                          <p className="text-[10px] text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-1">Notes</p>
+                                          <p className="text-sm text-navy dark:text-slate-200">{b.notes}</p>
+                                        </div>
+                                      )}
+                                    </motion.div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
                           {bookings.length === 0 && (
                           <tr><td colSpan={9} className="px-4 py-8 text-center text-navy/40 dark:text-slate-500">No bookings found</td></tr>
                         )}
@@ -1354,6 +1878,160 @@ export function AdminDashboard() {
                     )}
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ─── PAYMENTS TAB ───────────────────────────────────── */}
+          {tab === 'payments' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-serif font-bold text-navy dark:text-slate-100">Payment Approvals</h2>
+                {payments.length > 0 && (
+                  <span className="text-sm bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 px-3 py-1 rounded-full font-medium">
+                    {payments.length} pending
+                  </span>
+                )}
+              </div>
+
+              {paymentsError && (
+                <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-xl text-sm">
+                  {paymentsError}
+                  <button onClick={() => setPaymentsError('')} className="ml-2 underline">Dismiss</button>
+                </div>
+              )}
+
+              <div className="bg-white dark:bg-slate-card rounded-2xl border border-sand dark:border-slate-border overflow-hidden">
+                {paymentsLoading ? (
+                  <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 text-gold animate-spin" /></div>
+                ) : payments.length === 0 ? (
+                  <div className="px-4 py-12 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-sand/40 dark:bg-slate-border rounded-full flex items-center justify-center">
+                      <Wallet className="w-8 h-8 text-navy/40 dark:text-slate-400" />
+                    </div>
+                    <p className="text-navy/60 dark:text-slate-400 font-medium">No pending payment approvals</p>
+                    <p className="text-sm text-navy/40 dark:text-slate-500 mt-1">Payments made via Vodafone Cash or InstaPay will appear here for review.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-sand dark:divide-slate-border">
+                    {payments.map((p: any) => (
+                      <div key={p.id} className="p-6">
+                        <div className="flex flex-col lg:flex-row gap-6">
+                          {/* Receipt image */}
+                          <div className="shrink-0">
+                            {p.receipt_url ? (
+                              <a href={p.receipt_url} target="_blank" rel="noopener noreferrer">
+                                <img
+                                  src={p.receipt_url}
+                                  alt="Payment receipt"
+                                  className="w-48 h-48 object-contain rounded-xl border border-sand dark:border-slate-border bg-sand/20 hover:border-gold/50 transition-colors cursor-pointer"
+                                />
+                              </a>
+                            ) : (
+                              <div className="w-48 h-48 rounded-xl border-2 border-dashed border-sand dark:border-slate-border flex items-center justify-center text-navy/30 dark:text-slate-500">
+                                No receipt
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Details */}
+                          <div className="flex-1 min-w-0 space-y-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                              <div>
+                                <p className="text-xs text-navy/50 dark:text-slate-400 uppercase tracking-wider">User</p>
+                                <p className="text-sm font-medium text-navy dark:text-slate-100 mt-0.5">{p.user?.name || 'N/A'}</p>
+                                {p.user?.email && <p className="text-xs text-navy/60 dark:text-slate-400">{p.user.email}</p>}
+                              </div>
+                              <div>
+                                <p className="text-xs text-navy/50 dark:text-slate-400 uppercase tracking-wider">Landmark</p>
+                                <p className="text-sm font-medium text-navy dark:text-slate-100 mt-0.5">{p.landmark?.name || p.landmark || 'N/A'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-navy/50 dark:text-slate-400 uppercase tracking-wider">Amount</p>
+                                <p className="text-sm font-bold text-gold mt-0.5">{p.total} {p.currency || 'EGP'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-navy/50 dark:text-slate-400 uppercase tracking-wider">Payment Method</p>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium mt-0.5 bg-royal/10 text-royal dark:bg-royal/20 dark:text-royal/80 capitalize">
+                                  {p.payment_method || 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-xs text-navy/50 dark:text-slate-400 uppercase tracking-wider">Booking Date</p>
+                                <p className="text-sm text-navy dark:text-slate-100 mt-0.5">{p.booking_date || '-'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-navy/50 dark:text-slate-400 uppercase tracking-wider">Reference</p>
+                                <p className="text-sm font-mono text-navy dark:text-slate-100 mt-0.5">{p.confirmation_code || '-'}</p>
+                              </div>
+                            </div>
+
+                            {/* Payer details */}
+                            {(p.payer_name || p.payer_email || p.payer_phone) && (
+                              <div className="bg-sand/20 dark:bg-slate-border/30 rounded-xl p-3">
+                                <p className="text-xs text-navy/50 dark:text-slate-400 uppercase tracking-wider mb-1">Payer Details</p>
+                                <div className="text-sm text-navy dark:text-slate-200 space-y-0.5">
+                                  {p.payer_name && <p>Name: {p.payer_name}</p>}
+                                  {p.payer_email && <p>Email: {p.payer_email}</p>}
+                                  {p.payer_phone && <p>Phone: {p.payer_phone}</p>}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="shrink-0 flex flex-row lg:flex-col gap-2 items-start">
+                            {rejectPaymentId === Number(p.id) ? (
+                              <div className="space-y-2 w-full">
+                                <textarea
+                                  value={rejectPaymentReason}
+                                  onChange={e => setRejectPaymentReason(e.target.value)}
+                                  placeholder="Reason for rejection..."
+                                  rows={2}
+                                  className="w-full bg-offwhite dark:bg-midnight border border-red-300 dark:border-red-700 rounded-lg py-1.5 px-2.5 text-xs text-navy dark:text-slate-100 focus:outline-none focus:border-red-500 resize-none"
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleRejectPayment(Number(p.id))}
+                                    disabled={processingPaymentId === Number(p.id)}
+                                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-60 transition-colors"
+                                  >
+                                    {processingPaymentId === Number(p.id) ? '...' : 'Confirm Reject'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setRejectPaymentId(null); setRejectPaymentReason(''); }}
+                                    className="px-3 py-1.5 text-xs font-medium text-navy/70 dark:text-slate-300 border border-sand dark:border-slate-border rounded-lg hover:bg-sand/50 dark:hover:bg-slate-border/50 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleApprovePayment(Number(p.id))}
+                                  disabled={processingPaymentId === Number(p.id)}
+                                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-60 transition-colors"
+                                >
+                                  {processingPaymentId === Number(p.id) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                  Approve Payment
+                                </button>
+                                <button
+                                  onClick={() => setRejectPaymentId(Number(p.id))}
+                                  disabled={processingPaymentId === Number(p.id)}
+                                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-500/30 disabled:opacity-60 transition-colors"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -1576,7 +2254,12 @@ export function AdminDashboard() {
       {/* ─── LANDMARK MODAL ──────────────────────────────────────── */}
       {showLandmarkModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowLandmarkModal(false)}>
-          <div className="bg-white dark:bg-slate-card rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="bg-white dark:bg-slate-card rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-serif font-bold text-navy dark:text-slate-100">
                 {editingLandmark ? 'Edit Landmark' : 'Add Landmark'}
@@ -1704,7 +2387,7 @@ export function AdminDashboard() {
                 {editingLandmark ? 'Update' : 'Create'}
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
@@ -1904,6 +2587,157 @@ export function AdminDashboard() {
   );
 }
 
+// ─── Mini Sparkline Chart ──────────────────────────────────────────
+function Sparkline({ data, color = '#D4AF37' }: { data: number[]; color?: string }) {
+  const w = 80;
+  const h = 28;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`).join(' ');
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts.split(' ').pop()?.split(',')[0]} cy={pts.split(' ').pop()?.split(',')[1]} r="2" fill={color} />
+    </svg>
+  );
+}
+
+// ─── Bar Chart ─────────────────────────────────────────────────────
+function BarChart({
+  data,
+  bars = 7,
+  color = '#D4AF37',
+}: {
+  data: { label: string; value: number }[];
+  bars?: number;
+  color?: string;
+}) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <div className="flex items-end gap-1.5 h-full">
+      {data.slice(-bars).map((d, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: `${(d.value / max) * 100}%` }}
+            transition={{ type: 'spring', stiffness: 100, damping: 20, delay: i * 0.05 }}
+            className="w-full rounded-t-md transition-colors duration-300"
+            style={{ backgroundColor: color, opacity: 0.3 + 0.7 * (d.value / max) }}
+            title={`${d.label}: ${d.value}`}
+          />
+          <span className="text-[8px] text-navy/50 dark:text-slate-400 truncate w-full text-center leading-tight">{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Animated Counter ──────────────────────────────────────────────
+function AnimatedCounter({ value, suffix = '' }: { value: number; suffix?: string }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = 0;
+    const end = value;
+    const duration = 800;
+    const step = Math.max(1, Math.floor(end / 30));
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= end) { start = end; clearInterval(timer); }
+      setDisplay(start);
+    }, duration / 30);
+    return () => clearInterval(timer);
+  }, [value]);
+  return <>{display}{suffix}</>;
+}
+
+// ─── Sortable Column Header ────────────────────────────────────────
+function SortHeader({ label, field, currentField, direction, onSort }: {
+  label: string;
+  field: string;
+  currentField: string;
+  direction: 'asc' | 'desc';
+  onSort: (field: string) => void;
+}) {
+  const isActive = currentField === field;
+  const ArrowIcon = direction === 'asc' ? '▲' : '▼';
+  return (
+    <th
+      className="px-4 py-3 cursor-pointer select-none hover:text-navy dark:hover:text-slate-100 transition-colors"
+      onClick={() => onSort(field)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {isActive && <span className="text-[8px] leading-none">{ArrowIcon}</span>}
+      </span>
+    </th>
+  );
+}
+
+// ─── Hover Preview Card ───────────────────────────────────────────
+function HoverPreview({ children, content }: { children: React.ReactNode; content: React.ReactNode }) {
+  const [show, setShow] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const showTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => { clearTimeout(timeoutRef.current); showTimeoutRef.current = setTimeout(() => setShow(true), 350); }}
+      onMouseLeave={() => { clearTimeout(showTimeoutRef.current); timeoutRef.current = setTimeout(() => setShow(false), 150); }}
+    >
+      {children}
+      <AnimatePresence>
+        {show && (
+          <motion.div
+            initial={{ opacity: 0, y: 4, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 top-full left-0 mt-1 w-64 bg-white dark:bg-slate-card border border-sand dark:border-slate-border rounded-xl shadow-lg p-3 pointer-events-auto"
+            onMouseEnter={() => { clearTimeout(timeoutRef.current); setShow(true); }}
+            onMouseLeave={() => { setShow(false); }}
+          >
+            {content}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Copy Button ──────────────────────────────────────────────────
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); }}
+      className="inline-flex items-center gap-1 text-[10px] text-navy/40 dark:text-slate-500 hover:text-royal dark:hover:text-gold transition-colors"
+      title="Copy to clipboard"
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
+  );
+}
+
+// ─── Relative Time ─────────────────────────────────────────────────
+function RelativeTime({ date }: { date: string }) {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    const update = () => {
+      const diff = Date.now() - new Date(date).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) setLabel('just now');
+      else if (mins < 60) setLabel(`${mins}m ago`);
+      else if (mins < 1440) setLabel(`${Math.floor(mins / 60)}h ago`);
+      else setLabel(`${Math.floor(mins / 1440)}d ago`);
+    };
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  }, [date]);
+  return <span title={new Date(date).toLocaleString()}>{label}</span>;
+}
+
 // ─── Searchable Combobox ───────────────────────────────────────────
 function FilterCombobox({
   label,
@@ -1980,3 +2814,4 @@ function FilterCombobox({
     </div>
   );
 }
+export default AdminDashboard;

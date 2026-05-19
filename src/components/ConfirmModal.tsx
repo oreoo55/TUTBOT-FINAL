@@ -1,3 +1,4 @@
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, X } from 'lucide-react';
 
@@ -12,7 +13,7 @@ interface ConfirmModalProps {
   onCancel: () => void;
 }
 
-export function ConfirmModal({
+export const ConfirmModal = React.memo(function ConfirmModal({
   open,
   title,
   message,
@@ -87,4 +88,4 @@ export function ConfirmModal({
       )}
     </AnimatePresence>
   );
-}
+});

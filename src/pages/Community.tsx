@@ -26,6 +26,8 @@ import { Counter } from '../components/Counter';
 import { topTravelers, travelStories, landmarks } from '../data/mockData';
 import { api, getAuthToken } from '../lib/api';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { Skeleton } from '../components/Skeleton';
+import { EmptyState } from '../components/EmptyState';
 interface Comment {
   id: string;
   userId?: string;
@@ -92,20 +94,30 @@ export function Community() {
   const [expandedComments, setExpandedComments] = useState<Set<string>>(
     new Set()
   );
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState('');
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [leaderboardError, setLeaderboardError] = useState('');
 
   useEffect(() => {
-    api.get<any>('/me')
+    const abort = new AbortController();
+    api.get<any>('/me', { signal: abort.signal })
       .then((res) => setCurrentUser(res || null))
       .catch(() => {});
-    api.get<any>('/community/posts?per_page=20')
-      .then((res) => setPosts(res.data || []))
-      .catch(() => {});
-    api.get<any>('/community/leaderboard')
-      .then((res) => setLeaderboard(res.data || []))
-      .catch(() => {});
-    api.get<any>('/landmarks?per_page=100')
+    setPostsLoading(true);
+    setLeaderboardLoading(true);
+    api.get<any>('/community/posts?per_page=20', { signal: abort.signal })
+      .then((res) => { setPosts(res.data || []); setPostsError(''); })
+      .catch(() => { setPostsError('Failed to load posts'); })
+      .finally(() => setPostsLoading(false));
+    api.get<any>('/community/leaderboard', { signal: abort.signal })
+      .then((res) => { setLeaderboard(res.data || []); setLeaderboardError(''); })
+      .catch(() => { setLeaderboardError('Failed to load leaderboard'); })
+      .finally(() => setLeaderboardLoading(false));
+    api.get<any>('/landmarks?per_page=100', { signal: abort.signal })
       .then((res) => setLandmarks(res.data || []))
       .catch(() => {});
+    return () => abort.abort();
   }, []);
 
   const filteredPosts =
@@ -358,41 +370,82 @@ export function Community() {
           {/* Main Feed */}
           <div className="lg:col-span-2 space-y-8">
             {/* Post Creator */}
-            <PostCreator onPublish={handleAddPost} landmarks={landmarks} currentUserAvatar={leaderboard[0]?.avatar || ''} />
+            <PostCreator onPublish={handleAddPost} landmarks={landmarks} currentUserAvatar={currentUser?.avatar || ''} />
 
             {/* Filters */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               {filters.map((filter) =>
-              <button
+              <motion.button
                 key={filter}
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setActiveFilter(filter)}
                 className={`px-5 py-2 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${activeFilter === filter ? 'bg-royal dark:bg-gold text-white shadow-md' : 'bg-white dark:bg-slate-card text-navy/60 dark:text-slate-400 hover:bg-sand/50 dark:hover:bg-slate-border border border-sand dark:border-slate-border'}`}>
                 
                   {filter}
-                </button>
+                </motion.button>
               )}
             </div>
 
             {/* Posts Feed */}
             <div className="space-y-6">
-              {filteredPosts.map((post, idx) =>
-              <PostCard
-                key={post.id}
-                post={post}
-                idx={idx}
-                isCommentsOpen={expandedComments.has(post.id)}
-                onToggleLike={() => handleToggleLike(post.id)}
-                onToggleComments={() => handleToggleComments(post.id)}
-                onAddComment={(text) => handleAddComment(post.id, text)}
-                onAddReply={(cid, text) => handleAddReply(post.id, cid, text)}
-                onAskAI={() => handleAddAISuggestion(post.id, post.location)}
-                currentUser={currentUser}
-                onDeletePost={(pid) => setPosts((prev) => prev.filter((p) => p.id !== pid))}
-                onUpdatePost={(pid, text) => setPosts((prev) => prev.map((p) => p.id === pid ? { ...p, excerpt: text } : p))}
-                onDeleteComment={(pid, cid) => setPosts((prev) => prev.map((p) => p.id === pid ? { ...p, comments: Math.max(0, p.comments - 1), commentList: (p.commentList || []).filter((c: Comment) => c.id !== cid).map((c: Comment) => ({ ...c, replies: c.replies?.filter((r) => r.id !== cid) })) } : p))}
-                onUpdateComment={(pid, cid, text) => setPosts((prev) => prev.map((p) => p.id === pid ? { ...p, commentList: (p.commentList || []).map((c: Comment) => c.id === cid ? { ...c, text } : { ...c, replies: c.replies?.map((r) => r.id === cid ? { ...r, text } : r) }) } : p))}
-                currentUserAvatar={leaderboard[0]?.avatar || ''} />
-
+              {postsLoading ? (
+                <>
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="bg-white dark:bg-slate-card rounded-[25px] overflow-hidden border border-sand dark:border-slate-border">
+                      <div className="p-5 flex items-center gap-3">
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                        <div className="space-y-2 flex-1">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-20" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-48 w-full !rounded-none" />
+                      <div className="p-5 space-y-3">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-4 w-1/2" />
+                        <div className="flex gap-4 pt-4 border-t border-sand dark:border-slate-border">
+                          <Skeleton className="h-8 w-20 rounded-lg" />
+                          <Skeleton className="h-8 w-20 rounded-lg" />
+                          <Skeleton className="h-8 w-20 rounded-lg" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : postsError ? (
+                <div className="bg-white dark:bg-slate-card rounded-[25px] p-8 border border-sand dark:border-slate-border text-center">
+                  <p className="text-navy/60 dark:text-slate-300/60 mb-4">{postsError}</p>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => window.location.reload()}
+                    className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+                  >
+                    Retry
+                  </motion.button>
+                </div>
+              ) : filteredPosts.length === 0 ? (
+                <EmptyState icon={MessageCircle} title="No posts in this category yet." />
+              ) : (
+                filteredPosts.map((post, idx) =>
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  idx={idx}
+                  isCommentsOpen={expandedComments.has(post.id)}
+                  onToggleLike={() => handleToggleLike(post.id)}
+                  onToggleComments={() => handleToggleComments(post.id)}
+                  onAddComment={(text) => handleAddComment(post.id, text)}
+                  onAddReply={(cid, text) => handleAddReply(post.id, cid, text)}
+                  onAskAI={() => handleAddAISuggestion(post.id, post.location)}
+                  currentUser={currentUser}
+                  onDeletePost={(pid) => setPosts((prev) => prev.filter((p) => p.id !== pid))}
+                  onUpdatePost={(pid, text) => setPosts((prev) => prev.map((p) => p.id === pid ? { ...p, excerpt: text } : p))}
+                  onDeleteComment={(pid, cid) => setPosts((prev) => prev.map((p) => p.id === pid ? { ...p, comments: Math.max(0, p.comments - 1), commentList: (p.commentList || []).filter((c: Comment) => c.id !== cid).map((c: Comment) => ({ ...c, replies: c.replies?.filter((r) => r.id !== cid) })) } : p))}
+                  onUpdateComment={(pid, cid, text) => setPosts((prev) => prev.map((p) => p.id === pid ? { ...p, commentList: (p.commentList || []).map((c: Comment) => c.id === cid ? { ...c, text } : { ...c, replies: c.replies?.map((r) => r.id === cid ? { ...r, text } : r) }) } : p))}
+                  currentUserAvatar={currentUser?.avatar || ''} />
+                )
               )}
             </div>
           </div>
@@ -418,7 +471,25 @@ export function Community() {
               </div>
 
               <div className={showFullLeaderboard ? 'space-y-4 max-h-[420px] overflow-y-auto' : 'space-y-4'}>
-                {leaderboard.slice(0, showFullLeaderboard ? 20 : 5).map((t, idx) =>
+                {leaderboardLoading ? (
+                  <>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="flex items-center gap-3 p-3">
+                        <Skeleton className="w-12 h-12 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                        <Skeleton className="h-6 w-16 rounded-md" />
+                      </div>
+                    ))}
+                  </>
+                ) : leaderboardError ? (
+                  <p className="text-sm text-navy/60 dark:text-slate-300/60 text-center py-4">{leaderboardError}</p>
+                ) : leaderboard.length === 0 ? (
+                  <EmptyState icon={Award} title="No explorers yet." />
+                ) : (
+                leaderboard.slice(0, showFullLeaderboard ? 20 : 5).map((t, idx) =>
                 <div
                   key={t.id}
                   className="flex items-center gap-3 p-3 rounded-xl hover:bg-sand/30 dark:hover:bg-slate-border transition-colors cursor-pointer"
@@ -451,15 +522,17 @@ export function Community() {
                         {t.badges} Badges
                       </span>
                     </div>
-                  </div>
-                )}
+                    </div>
+                ))}
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setShowFullLeaderboard(!showFullLeaderboard)}
                 className="w-full mt-4 py-3 border border-sand dark:border-slate-border rounded-xl text-navy dark:text-slate-100 text-sm font-medium hover:bg-sand/30 dark:hover:bg-slate-border transition-colors">
                 {showFullLeaderboard ? 'Show Less' : 'View Full Leaderboard'}
-              </button>
+              </motion.button>
             </motion.div>
           </div>
         </div>
@@ -536,13 +609,17 @@ function PostCreator({ onPublish, landmarks, currentUserAvatar }: {onPublish: (p
           alt="You"
           className="w-12 h-12 rounded-full object-cover" />
         
-          <button
+          <motion.button
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => setExpanded(true)}
           className="flex-1 bg-sand/30 dark:bg-slate-border/40 hover:bg-sand/50 dark:hover:bg-slate-border transition-colors rounded-xl py-3 px-4 text-left text-navy/50 dark:text-slate-400 text-sm">
           
             What's on your mind?
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => {
             setExpanded(true);
             setTimeout(() => imageInputRef.current?.click(), 0);
@@ -551,7 +628,7 @@ function PostCreator({ onPublish, landmarks, currentUserAvatar }: {onPublish: (p
           aria-label="Add photo">
           
             <ImageIcon className="w-5 h-5" />
-          </button>
+          </motion.button>
         </div> :
 
       <div className="p-6 space-y-4">
@@ -630,30 +707,36 @@ function PostCreator({ onPublish, landmarks, currentUserAvatar }: {onPublish: (p
           {/* Toolbar */}
           <div className="flex items-center justify-between pt-4 border-t border-sand dark:border-slate-border">
             <div className="flex items-center gap-1">
-              <button
+              <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => imageInputRef.current?.click()}
               className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sand/40 dark:hover:bg-slate-border text-navy/70 dark:text-slate-400 text-sm transition-colors"
               aria-label="Add image">
               
                 <ImageIcon className="w-4 h-4 text-green-600" />
                 <span className="hidden sm:inline">Photo</span>
-              </button>
-              <button
+              </motion.button>
+              <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => videoInputRef.current?.click()}
               className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sand/40 dark:hover:bg-slate-border text-navy/70 dark:text-slate-400 text-sm transition-colors"
               aria-label="Add video">
               
                 <Video className="w-4 h-4 text-red-500" />
                 <span className="hidden sm:inline">Video</span>
-              </button>
+              </motion.button>
               <div className="relative">
-                <button
+                <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowLandmarkDropdown((s) => !s)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sand/40 dark:hover:bg-slate-border text-navy/70 dark:text-slate-400 text-sm transition-colors">
                 
                   <MapPin className="w-4 h-4 text-royal dark:text-gold" />
                   <span className="hidden sm:inline">Tag landmark</span>
-                </button>
+                </motion.button>
                 <AnimatePresence>
                   {showLandmarkDropdown &&
                 <motion.div
@@ -695,22 +778,26 @@ function PostCreator({ onPublish, landmarks, currentUserAvatar }: {onPublish: (p
                 }
                 </AnimatePresence>
               </div>
-              <button
+              <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sand/40 dark:hover:bg-slate-border text-navy/70 dark:text-slate-400 text-sm transition-colors"
               aria-label="Add emoji"
               onClick={() => setText(text + ' 🌟')}>
               
                 <Smile className="w-4 h-4 text-amber-500" />
-              </button>
+              </motion.button>
             </div>
 
-            <button
+            <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
             onClick={handlePublish}
             disabled={!text.trim() && !mediaPreview}
             className="bg-gold text-white px-6 py-2 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
             
               <Send className="w-4 h-4" /> Post
-            </button>
+            </motion.button>
           </div>
 
           <input
@@ -757,7 +844,7 @@ interface PostCardProps {
   onUpdateComment: (postId: string, commentId: string, text: string) => void;
   currentUserAvatar: string;
 }
-function PostCard({
+const PostCard = React.memo(function PostCard({
   post,
   idx,
   isCommentsOpen,
@@ -949,41 +1036,52 @@ function PostCard({
             </motion.span>
             {post.likes}
           </button>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onToggleComments}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-navy/50 dark:text-slate-400 hover:text-royal dark:hover:text-gold hover:bg-royal/5 dark:hover:bg-gold/10 transition-colors">
             
             <MessageCircle className="w-5 h-5" /> {post.comments}
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={onAskAI}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-navy/50 dark:text-slate-400 hover:text-gold hover:bg-gold/5 dark:hover:bg-gold/10 transition-colors"
             title="Ask Tut-Bot AI for tips about this place">
             
             <Sparkles className="w-5 h-5" />
             <span className="hidden sm:inline">AI Guide</span>
-          </button>
+          </motion.button>
           {isOwnPost &&
           <>
-              <button
+              <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={() => { setEditingPost(true); setEditPostText(post.excerpt); }}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-navy/50 dark:text-slate-400 hover:text-royal dark:hover:text-gold hover:bg-royal/5 dark:hover:bg-gold/10 transition-colors"
               aria-label="Edit post">
               
                 <Edit3 className="w-4 h-4" />
-              </button>
-              <button
+              </motion.button>
+              <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={() => setConfirmDelete({type: 'post'})}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-navy/50 dark:text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
               aria-label="Delete post">
               
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </motion.button>
             </>}
-          <button className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-navy/50 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 hover:bg-sand/40 dark:hover:bg-slate-border transition-colors">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-navy/50 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 hover:bg-sand/40 dark:hover:bg-slate-border transition-colors">
             <Share2 className="w-5 h-5" />
             <span className="hidden sm:inline">Share</span>
-          </button>
+          </motion.button>
         </div>
 
         {/* Comments Section */}
@@ -1192,14 +1290,16 @@ function PostCard({
                         autoFocus
                         className="flex-1 bg-sand/30 dark:bg-slate-border rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 text-navy dark:text-slate-100 dark:placeholder:text-slate-400" />
                       
-                              <button
+                              <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
                         onClick={() => handleSubmitReply(c.id)}
                         disabled={!replyText.trim()}
                         className="text-royal dark:text-gold hover:text-gold disabled:text-navy/30 dark:disabled:text-slate-500 transition-colors"
                         aria-label="Send reply">
                         
                                 <Send className="w-4 h-4" />
-                              </button>
+                              </motion.button>
                             </div>
                     }
                         </div>
@@ -1224,14 +1324,16 @@ function PostCard({
                   placeholder="Write a comment..."
                   className="flex-1 bg-sand/30 dark:bg-slate-border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 text-navy dark:text-slate-100 dark:placeholder:text-slate-400" />
                 
-                  <button
+                  <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleSubmitComment}
                   disabled={!commentText.trim()}
                   className="bg-royal text-white p-2 rounded-xl hover:bg-royal/90 disabled:opacity-40 transition-colors"
                   aria-label="Post comment">
                   
                     <Send className="w-4 h-4" />
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             </motion.div>
@@ -1250,4 +1352,5 @@ function PostCard({
       />
     </motion.div>);
 
-}
+});
+export default Community;

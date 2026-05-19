@@ -5,6 +5,8 @@ import {
   MapPin, Award, Star, MessageSquare, Calendar,
   ArrowLeft, Trophy, ChevronRight
 } from 'lucide-react';
+import { Skeleton } from '../components/Skeleton';
+import { EmptyState } from '../components/EmptyState';
 import { api } from '../lib/api';
 
 export function PublicProfile() {
@@ -15,10 +17,12 @@ export function PublicProfile() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'Posts' | 'Reviews'>('Posts');
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    setDataError('');
     Promise.all([
       api.get<any>(`/users/${id}`),
       api.get<any>(`/users/${id}/posts`),
@@ -30,13 +34,40 @@ export function PublicProfile() {
         setReviews(reviewsRes.data ?? []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setDataError('Failed to load profile'); setLoading(false); });
   }, [id]);
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8 flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin w-10 h-10 border-4 border-gold border-t-transparent rounded-full" />
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+        <Skeleton className="h-5 w-24" />
+        <div className="bg-white dark:bg-slate-card rounded-[30px] p-8 border border-sand dark:border-slate-border">
+          <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+            <Skeleton className="w-32 h-32 rounded-full" />
+            <div className="flex-1 space-y-4 w-full">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-20 w-full rounded-2xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (dataError) {
+    return (
+      <div className="max-w-5xl mx-auto px-6 py-8 text-center">
+        <p className="text-navy/60 dark:text-slate-300/60 mb-4">{dataError}</p>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => window.location.reload()}
+          className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+        >
+          Retry
+        </motion.button>
       </div>
     );
   }
@@ -54,15 +85,22 @@ export function PublicProfile() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       {/* Back button */}
-      <button
+      <motion.button
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        whileHover={{ x: -3 }}
+        whileTap={{ scale: 0.97 }}
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-navy/60 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 mb-6 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" /> Back
-      </button>
+      </motion.button>
 
       {/* Profile Card */}
-      <div className="bg-white dark:bg-slate-card rounded-[30px] p-8 shadow-soft dark:shadow-soft-dark border border-sand dark:border-slate-border mb-8 relative overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white dark:bg-slate-card rounded-[30px] p-8 shadow-soft dark:shadow-soft-dark border border-sand dark:border-slate-border mb-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-gold/5 rounded-bl-full -z-0" />
 
         <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center md:items-start">
@@ -153,15 +191,17 @@ export function PublicProfile() {
             </div>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Tabs */}
       <div className="mb-8 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {(['Posts', 'Reviews'] as const).map((tab) => {
           const count = tab === 'Posts' ? user.posts_count : user.reviews_count;
           return (
-            <button
+            <motion.button
               key={tab}
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setActiveTab(tab)}
               className={`relative px-6 py-3 rounded-xl text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
                 activeTab === tab
@@ -186,7 +226,7 @@ export function PublicProfile() {
                   transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
                 />
               )}
-            </button>
+            </motion.button>
           );
         })}
       </div>
@@ -194,7 +234,7 @@ export function PublicProfile() {
       {/* Tab Content */}
       <motion.div layout className="space-y-4">
         {activeTab === 'Posts' && posts.length === 0 && (
-          <p className="text-center text-navy/50 dark:text-slate-400 py-8">No posts yet.</p>
+          <EmptyState icon={MessageSquare} title="No posts yet." />
         )}
         {activeTab === 'Posts' && posts.map((post: any) => (
           <motion.div
@@ -203,6 +243,7 @@ export function PublicProfile() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => navigate('/community')}
+            whileHover={{ y: -2, boxShadow: '0 8px 25px rgba(0,0,0,0.08)' }}
             className="bg-white dark:bg-slate-card rounded-[20px] p-5 shadow-soft dark:shadow-soft-dark border border-sand dark:border-slate-border cursor-pointer hover:shadow-lg transition-shadow"
           >
             <div className="flex items-start gap-4">
@@ -234,7 +275,7 @@ export function PublicProfile() {
         ))}
 
         {activeTab === 'Reviews' && reviews.length === 0 && (
-          <p className="text-center text-navy/50 dark:text-slate-400 py-8">No reviews yet.</p>
+          <EmptyState icon={Star} title="No reviews yet." />
         )}
         {activeTab === 'Reviews' && reviews.map((review: any) => (
           <motion.div
@@ -243,6 +284,7 @@ export function PublicProfile() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => navigate(`/landmark/${review.landmark_id || ''}`)}
+            whileHover={{ y: -2, boxShadow: '0 8px 25px rgba(0,0,0,0.08)' }}
             className="bg-white dark:bg-slate-card rounded-[20px] p-5 shadow-soft dark:shadow-soft-dark border border-sand dark:border-slate-border cursor-pointer hover:shadow-lg transition-shadow"
           >
             <div className="flex items-start gap-4">

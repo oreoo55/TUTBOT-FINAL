@@ -460,8 +460,8 @@ class AdminController extends Controller
             return response()->json(['valid' => false, 'error' => 'This booking has been cancelled.'], 400);
         }
 
-        if ($booking->payment_method === 'cash' && $booking->payment_status !== 'paid') {
-            return response()->json(['valid' => false, 'error' => 'Payment pending (cash). Please confirm payment before entry.'], 400);
+        if ($booking->payment_status !== 'paid') {
+            return response()->json(['valid' => false, 'error' => 'Payment not confirmed. Booking is pending payment approval.'], 400);
         }
 
         if ($booking->booking_date->format('Y-m-d') !== now()->toDateString()) {
@@ -559,7 +559,123 @@ class AdminController extends Controller
         return response()->json($booking);
     }
 
-    // ─── List Users ────────────────────────────────────────────────────
+    // ─── Payment Approvals ─────────────────────────────────────────────
+
+    public function listPayments(Request $request): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $payments = Booking::with('user', 'landmark')
+            ->whereIn('payment_method', ['vodafone', 'instapay'])
+            ->where('payment_status', 'pending')
+            ->latest()
+            ->get()
+            ->map(fn($b) => [
+                'id' => (string) $b->id,
+                'confirmation_code' => $b->confirmation_code,
+                'status' => $b->status,
+                'payment_method' => $b->payment_method,
+                'payment_status' => $b->payment_status,
+                'receipt_url' => $b->receipt_path ? Storage::url($b->receipt_path) : null,
+                'booking_date' => $b->booking_date->format('Y-m-d'),
+                'adults' => $b->adults,
+                'children' => $b->children,
+                'subtotal' => $b->subtotal,
+                'service_fee' => $b->service_fee,
+                'total' => $b->total,
+                'currency' => $b->currency,
+                'payer_name' => $b->payer_name,
+                'payer_email' => $b->payer_email,
+                'payer_phone' => $b->payer_phone,
+                'user' => $b->user ? [
+                    'id' => (string) $b->user->id,
+                    'name' => $b->user->name,
+                    'email' => $b->user->email,
+                ] : null,
+                'landmark' => $b->landmark ? [
+                    'id' => (string) $b->landmark->id,
+                    'name' => $b->landmark->name,
+                ] : null,
+                'created_at' => $b->created_at?->toIso8601String(),
+            ]);
+
+        return response()->json($payments);
+    }
+
+    public function approvePayment(Request $request, string $id): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $booking = Booking::findOrFail((int) $id);
+
+        if (!in_array($booking->payment_method, ['vodafone', 'instapay'])) {
+            return response()->json(['message' => 'Only vodafone/instapay payments can be approved via this endpoint.'], 400);
+        }
+
+        if ($booking->payment_status !== 'pending') {
+            return response()->json(['message' => 'Payment is not pending.'], 400);
+        }
+
+        $booking->update(['payment_status' => 'paid']);
+
+        $landmarkName = $booking->landmark?->name ?? 'Booking';
+        Notification::create([
+            'user_id' => $booking->user_id,
+            'type' => 'payment_approved',
+            'data' => [
+                'booking_id' => (string) $booking->id,
+                'landmark_name' => $landmarkName,
+                'amount' => $booking->total,
+                'currency' => $booking->currency,
+            ],
+        ]);
+
+        $booking->user?->addXp(25);
+        $booking->user?->checkBadges();
+
+        return response()->json(['success' => true, 'id' => (string) $booking->id, 'payment_status' => 'paid']);
+    }
+
+    public function rejectPayment(Request $request, string $id): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $booking = Booking::findOrFail((int) $id);
+
+        if (!in_array($booking->payment_method, ['vodafone', 'instapay'])) {
+            return response()->json(['message' => 'Only vodafone/instapay payments can be rejected via this endpoint.'], 400);
+        }
+
+        if ($booking->payment_status !== 'pending') {
+            return response()->json(['message' => 'Payment is not pending.'], 400);
+        }
+
+        $booking->update([
+            'payment_status' => 'failed',
+            'status' => 'cancelled',
+            'cancelled_at' => now(),
+            'cancellation_reason' => $validated['reason'] ?? 'Payment rejected by admin',
+        ]);
+
+        $landmarkName = $booking->landmark?->name ?? 'Booking';
+        Notification::create([
+            'user_id' => $booking->user_id,
+            'type' => 'payment_rejected',
+            'data' => [
+                'booking_id' => (string) $booking->id,
+                'landmark_name' => $landmarkName,
+                'reason' => $validated['reason'] ?? null,
+            ],
+        ]);
+
+        return response()->json(['success' => true, 'id' => (string) $booking->id, 'payment_status' => 'failed', 'status' => 'cancelled']);
+    }
+
+    // ─── List Users (basic) ────────────────────────────────────────────
 
     public function listUsers(Request $request): JsonResponse
     {
@@ -576,6 +692,45 @@ class AdminController extends Controller
         }
 
         return response()->json($query->orderBy('name')->limit(100)->get());
+    }
+
+    // ─── List Users (detailed, for Users tab) ───────────────────────────
+
+    public function listUsersDetailed(Request $request): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $search = $request->query('search');
+        $query = User::with('badges');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        $users = $query->orderBy('name')->limit(200)->get()->map(fn($u) => [
+            'id' => (string) $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'avatar' => $u->avatar,
+            'level' => $u->level ?? 0,
+            'xp' => $u->xp ?? 0,
+            'next_level_xp' => $u->next_level_xp ?? 100,
+            'location' => $u->location,
+            'bio' => $u->bio,
+            'is_admin' => (bool) $u->is_admin,
+            'created_at' => $u->created_at?->toIso8601String(),
+            'badges' => $u->badges->map(fn($b) => [
+                'id' => (string) $b->id,
+                'name' => $b->name,
+                'description' => $b->description,
+                'icon' => $b->icon,
+            ]),
+        ]);
+
+        return response()->json($users);
     }
 
     // ─── Send Notification ────────────────────────────────────────────

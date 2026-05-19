@@ -21,6 +21,8 @@ import {
 
 import { LandmarkCard } from '../components/LandmarkCard';
 import { SearchDropdown, SearchScope } from '../components/SearchDropdown';
+import { Skeleton, CardSkeleton } from '../components/Skeleton';
+import { EmptyState } from '../components/EmptyState';
 import { api } from '../lib/api';
 export function Landing() {
   const navigate = useNavigate();
@@ -32,22 +34,34 @@ export function Landing() {
   const [topLandmarks, setTopLandmarks] = useState<any[]>([]);
   const [wallReviews, setWallReviews] = useState<any[]>([]);
   const [allLandmarks, setAllLandmarks] = useState<any[]>([]);
+  const [landmarksLoading, setLandmarksLoading] = useState(true);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [landmarksError, setLandmarksError] = useState('');
+  const [reviewsError, setReviewsError] = useState('');
   const governorates = useMemo(() =>
     Array.from(new Set(allLandmarks.map((l: any) => l.region))).sort(),
     [allLandmarks]
   );
   useEffect(() => {
-    api.get<any>('/landmarks?sort=rating&per_page=100').then(res => {
+    setLandmarksLoading(true);
+    const abort = new AbortController();
+    api.get<any>('/landmarks?sort=rating&per_page=100', { signal: abort.signal }).then(res => {
       const items = res.data || [];
       setAllLandmarks(items);
       const sorted = [...items].sort((a: any, b: any) => b.rating - a.rating || (b.reviews_count ?? 0) - (a.reviews_count ?? 0));
       setTopLandmarks(sorted.slice(0, 3));
-    }).catch(() => {});
+      setLandmarksError('');
+    }).catch(() => { if (!abort.signal.aborted) setLandmarksError('Failed to load landmarks'); }).finally(() => setLandmarksLoading(false));
+    return () => abort.abort();
   }, []);
   useEffect(() => {
-    api.get<any>('/reviews/random').then(res => {
+    setReviewsLoading(true);
+    const abort = new AbortController();
+    api.get<any>('/reviews/random', { signal: abort.signal }).then(res => {
       setWallReviews(res.data || []);
-    }).catch(() => {});
+      setReviewsError('');
+    }).catch(() => { if (!abort.signal.aborted) setReviewsError('Failed to load reviews'); }).finally(() => setReviewsLoading(false));
+    return () => abort.abort();
   }, []);
   const scope: SearchScope =
   searchTab === 'Name' ?
@@ -166,16 +180,18 @@ export function Landing() {
             
             <div className="flex gap-2 mb-4 px-2">
               {(['Name', 'Governorate', 'Category'] as const).map((tab) =>
-              <button
+              <motion.button
                 key={tab}
                 onClick={() => {
                   setSearchTab(tab);
                   setSearchQuery('');
                 }}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
                 className={`px-6 py-2 rounded-xl text-sm font-medium transition-all ${searchTab === tab ? 'bg-royal text-white shadow-md' : 'text-navy/60 dark:text-slate-300 hover:bg-royal/5 dark:hover:bg-gold/10'}`}>
                 
                   {tab}
-                </button>
+                </motion.button>
               )}
             </div>
 
@@ -209,12 +225,14 @@ export function Landing() {
 
               }
 
-              <button
+              <motion.button
                 type="submit"
-                className="absolute right-2 bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors shadow-glow">
+                whileHover={{ scale: 1.03, boxShadow: '0 0 25px rgba(212, 175, 55, 0.5)' }}
+                whileTap={{ scale: 0.97 }}
+                className="absolute right-2 bg-gold text-white px-6 py-2.5 rounded-xl font-medium shadow-glow">
                 
                 Explore
-              </button>
+              </motion.button>
 
               {searchTab === 'Name' &&
               <SearchDropdown
@@ -254,26 +272,41 @@ export function Landing() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {topLandmarks.slice(0, 3).map((landmark, idx) =>
-          <motion.div
-            key={landmark.id}
-            initial={{
-              opacity: 0,
-              y: 20
-            }}
-            whileInView={{
-              opacity: 1,
-              y: 0
-            }}
-            viewport={{
-              once: true
-            }}
-            transition={{
-              delay: idx * 0.1
-            }}>
-            
-              <LandmarkCard landmark={landmark} variant="tall" />
-            </motion.div>
+          {landmarksLoading ? (
+            Array.from({ length: 3 }).map((_, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+              >
+                <CardSkeleton />
+              </motion.div>
+            ))
+          ) : landmarksError ? (
+            <div className="col-span-full text-center py-12">
+              <p className="text-navy/60 dark:text-slate-400 mb-3">{landmarksError}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 text-sm font-medium bg-gold text-white rounded-xl hover:bg-gold/90 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : topLandmarks.length === 0 ? (
+            <EmptyState title="No top destinations available" />
+          ) : (
+            topLandmarks.slice(0, 3).map((landmark, idx) =>
+              <motion.div
+                key={landmark.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.1 }}
+              >
+                <LandmarkCard landmark={landmark} variant="tall" />
+              </motion.div>
+            )
           )}
         </div>
       </section>
@@ -316,29 +349,23 @@ export function Landing() {
             map((feature, idx) =>
             <motion.div
               key={idx}
-              initial={{
-                opacity: 0,
-                y: 20
-              }}
-              whileInView={{
-                opacity: 1,
-                y: 0
-              }}
-              viewport={{
-                once: true
-              }}
-              transition={{
-                delay: idx * 0.1
-              }}
-              className="bg-white rounded-[25px] p-8 shadow-soft border border-sand hover:border-gold/30 transition-colors">
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: idx * 0.1 }}
+              whileHover={{ y: -6, boxShadow: '0 12px 40px rgba(0,0,0,0.08)' }}
+              className="bg-white dark:bg-slate-card rounded-[25px] p-8 shadow-soft border border-sand dark:border-slate-border hover:border-gold/30 transition-colors cursor-default">
               
-                <div className="w-14 h-14 bg-royal/5 rounded-2xl flex items-center justify-center mb-6 text-royal">
+                <motion.div
+                  whileHover={{ scale: 1.1, rotate: 5 }}
+                  className="w-14 h-14 bg-royal/5 dark:bg-gold/10 rounded-2xl flex items-center justify-center mb-6 text-royal dark:text-gold"
+                >
                   <feature.icon className="w-7 h-7" />
-                </div>
-                <h3 className="text-xl font-serif font-bold text-navy mb-3">
+                </motion.div>
+                <h3 className="text-xl font-serif font-bold text-navy dark:text-slate-100 mb-3">
                   {feature.title}
                 </h3>
-                <p className="text-navy/60 text-sm leading-relaxed">
+                <p className="text-navy/60 dark:text-slate-400 text-sm leading-relaxed">
                   {feature.desc}
                 </p>
               </motion.div>
@@ -359,52 +386,74 @@ export function Landing() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {wallReviews.slice(0, 4).map((review, idx) =>
-          <motion.div
-            key={review.id}
-            initial={{
-              opacity: 0,
-              scale: 0.95
-            }}
-            whileInView={{
-              opacity: 1,
-              scale: 1
-            }}
-            viewport={{
-              once: true
-            }}
-            transition={{
-              delay: idx * 0.1
-            }}
-            className={`bg-white dark:bg-slate-card rounded-[25px] p-6 shadow-soft border border-sand dark:border-slate-border flex flex-col ${idx % 2 !== 0 ? 'md:mt-8' : ''}`}>
-            
-              <div className="flex gap-1 mb-4">
-                {[...Array(review.rating)].map((_, i) =>
-              <Star key={i} className="w-4 h-4 fill-gold text-gold" />
-              )}
-              </div>
-              <p className="text-navy/80 dark:text-slate-300 text-sm italic mb-6 flex-1">
-                "{review.text}"
-              </p>
-              <div className="flex items-center gap-3 mt-auto">
-                <img
-                src={review.avatar}
-                alt={review.name}
-                className="w-10 h-10 rounded-full object-cover cursor-pointer"
-                onClick={() => review.user_id && navigate(`/user/${review.user_id}`)} />
-              
-                <div>
-                  <h4
-                    className="font-medium text-navy dark:text-slate-100 text-sm cursor-pointer hover:text-royal dark:hover:text-gold transition-colors"
-                    onClick={() => review.user_id && navigate(`/user/${review.user_id}`)}>
-                    {review.name}
-                  </h4>
-                  <p className="text-xs text-navy/50 dark:text-slate-400">
-                    {review.landmark_name}
-                  </p>
+          {reviewsLoading ? (
+            Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className={`bg-white dark:bg-slate-card rounded-[25px] p-6 border border-sand dark:border-slate-border ${idx % 2 !== 0 ? 'md:mt-8' : ''}`}>
+                <div className="flex gap-1 mb-4">
+                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="w-4 h-4 !rounded-sm" />)}
+                </div>
+                <Skeleton className="h-16 w-full mb-6" />
+                <div className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 !rounded-full" />
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
                 </div>
               </div>
-            </motion.div>
+            ))
+          ) : reviewsError ? (
+            <div className="col-span-full text-center py-12">
+              <p className="text-navy/60 dark:text-slate-400 mb-3">{reviewsError}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 text-sm font-medium bg-gold text-white rounded-xl hover:bg-gold/90 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : wallReviews.length === 0 ? (
+            <EmptyState title="No reviews yet" />
+          ) : (
+            wallReviews.slice(0, 4).map((review, idx) =>
+              <motion.div
+                key={review.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.1 }}
+                whileHover={{ y: -4, transition: { type: 'spring', stiffness: 300, damping: 20 } }}
+                className={`bg-white dark:bg-slate-card rounded-[25px] p-6 shadow-soft border border-sand dark:border-slate-border flex flex-col ${idx % 2 !== 0 ? 'md:mt-8' : ''}`}>
+                
+                  <div className="flex gap-1 mb-4">
+                    {[...Array(review.rating)].map((_, i) =>
+                  <Star key={i} className="w-4 h-4 fill-gold text-gold" />
+                  )}
+                  </div>
+                  <p className="text-navy/80 dark:text-slate-300 text-sm italic mb-6 flex-1">
+                    "{review.text}"
+                  </p>
+                  <div className="flex items-center gap-3 mt-auto">
+                    <motion.img
+                    whileHover={{ scale: 1.1 }}
+                    src={review.avatar}
+                    alt={review.name}
+                    className="w-10 h-10 rounded-full object-cover cursor-pointer"
+                    onClick={() => review.user_id && navigate(`/user/${review.user_id}`)} />
+                  
+                    <div>
+                      <h4
+                        className="font-medium text-navy dark:text-slate-100 text-sm cursor-pointer hover:text-royal dark:hover:text-gold transition-colors"
+                        onClick={() => review.user_id && navigate(`/user/${review.user_id}`)}>
+                        {review.name}
+                      </h4>
+                      <p className="text-xs text-navy/50 dark:text-slate-400">
+                        {review.landmark_name}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+            )
           )}
         </div>
       </section>

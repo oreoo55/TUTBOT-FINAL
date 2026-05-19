@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Cropper, { Area } from 'react-easy-crop';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Edit2,
@@ -15,11 +16,15 @@ import {
   Star,
   MessageSquare,
   MapPin,
-  Trophy } from
+  Trophy,
+  Lock,
+  Eye,
+  EyeOff } from
 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, getAuthToken } from '../lib/api';
 import { useUserCollections } from '../contexts/UserCollectionsContext';
+import { Skeleton } from '../components/Skeleton';
 export function Profile() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -29,48 +34,44 @@ export function Profile() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
 
   useEffect(() => {
     if (!getAuthToken()) {
       setLoading(false);
       return;
     }
+    setDataError('');
     Promise.all([
       api.get<any>('/me'),
       api.get<{ data: any[] }>('/badges'),
-    ]).then(([user, badgesRes]) => {
-      setAllBadges(badgesRes.data);
-      Promise.all([
-        api.get<{ data: any[] }>('/me/bookings?status=current&per_page=100'),
-        api.get<{ data: any[] }>('/me/bookings?status=previous&per_page=100'),
-      ])
-          .then(([currentRes, previousRes]) => {
-            const mapTrip = (b: any) => ({
-              id: b.landmark?.id ?? b.id,
-              bookingId: b.id,
-              confirmationCode: b.confirmation_code,
-              name: b.landmark?.name ?? 'Unknown',
-              region: b.landmark?.region ?? '',
-              category: b.landmark?.category ?? '',
-              image: b.landmark?.image ?? '',
-              rating: b.landmark?.rating ?? 0,
-              reviews: b.landmark?.reviews ?? 0,
-              booking_date: b.booking_date,
-              status: b.status,
-              cancellation_requested_at: b.cancellation_requested_at,
-            });
-            setUserData({
-              ...user,
-              currentTrips: currentRes.data.map(mapTrip),
-              previousTrips: previousRes.data.map(mapTrip),
-            });
-          })
-          .catch(() => {
-            setUserData({ ...user, currentTrips: [], previousTrips: [] });
-          })
-          .finally(() => setLoading(false));
+      api.get<{ data: any[] }>('/me/bookings?status=current&per_page=100'),
+      api.get<{ data: any[] }>('/me/bookings?status=previous&per_page=100'),
+    ])
+      .then(([user, badgesRes, currentRes, previousRes]) => {
+        setAllBadges(badgesRes.data);
+        const mapTrip = (b: any) => ({
+          id: b.landmark?.id ?? b.id,
+          bookingId: b.id,
+          confirmationCode: b.confirmation_code,
+          name: b.landmark?.name ?? 'Unknown',
+          region: b.landmark?.region ?? '',
+          category: b.landmark?.category ?? '',
+          image: b.landmark?.image ?? '',
+          rating: b.landmark?.rating ?? 0,
+          reviews: b.landmark?.reviews ?? 0,
+          booking_date: b.booking_date,
+          status: b.status,
+          cancellation_requested_at: b.cancellation_requested_at,
+        });
+        setUserData({
+          ...user,
+          currentTrips: currentRes.data.map(mapTrip),
+          previousTrips: previousRes.data.map(mapTrip),
+        });
+        setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setDataError('Failed to load profile'); setLoading(false); });
   }, []);
   const [saveToast, setSaveToast] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -131,10 +132,60 @@ export function Profile() {
       setSaveError(err?.body?.message ?? err?.message ?? 'Failed to save profile');
     }
   };
+
+  const handlePasswordChange = async (passwords: { current_password: string; new_password: string; new_password_confirmation: string }) => {
+    setSaveError('');
+    try {
+      await api.post('/me/password', passwords);
+      setIsEditOpen(false);
+      setSaveToast(true);
+      setTimeout(() => setSaveToast(false), 2500);
+    } catch (err: any) {
+      setSaveError(err?.body?.message ?? err?.message ?? 'Failed to change password');
+    }
+  };
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-6 py-8 flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin w-10 h-10 border-4 border-gold border-t-transparent rounded-full" />
+      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+        <div className="bg-white dark:bg-slate-card rounded-[30px] p-8 border border-sand dark:border-slate-border">
+          <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+            <Skeleton className="w-32 h-32 rounded-full" />
+            <div className="flex-1 space-y-4 w-full">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-20 w-full rounded-2xl" />
+              <div className="flex gap-3">
+                <Skeleton className="h-10 w-32 rounded-xl" />
+                <Skeleton className="h-10 w-32 rounded-xl" />
+              </div>
+            </div>
+          </div>
+          <div className="mt-8 pt-8 border-t border-sand dark:border-slate-border">
+            <Skeleton className="h-4 w-32 mb-4" />
+            <div className="flex gap-4">
+              <Skeleton className="h-12 w-40 rounded-xl" />
+              <Skeleton className="h-12 w-40 rounded-xl" />
+              <Skeleton className="h-12 w-40 rounded-xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (dataError) {
+    return (
+      <div className="max-w-5xl mx-auto px-6 py-8 text-center">
+        <p className="text-navy/60 dark:text-slate-300/60 mb-4">{dataError}</p>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => window.location.reload()}
+          className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+        >
+          Retry
+        </motion.button>
       </div>
     );
   }
@@ -188,12 +239,14 @@ export function Profile() {
                   </p>
                 }
               </div>
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setIsEditOpen(true)}
                 className="px-6 py-2 border border-sand dark:border-slate-border rounded-xl text-sm font-medium text-navy dark:text-slate-100 hover:bg-sand/30 dark:hover:bg-slate-border transition-colors">
                 
                 Edit Profile
-              </button>
+              </motion.button>
             </div>
 
             <div className="bg-sand/30 dark:bg-slate-border rounded-2xl p-4 mt-6">
@@ -367,7 +420,7 @@ export function Profile() {
           userData.currentTrips.length :
           userData.previousTrips.length;
           return (
-            <button
+            <motion.button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`relative px-6 py-3 rounded-xl text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === tab ? 'text-royal dark:text-gold' : 'text-navy/60 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100 hover:bg-sand/30 dark:hover:bg-slate-border'}`}>
@@ -389,41 +442,22 @@ export function Profile() {
                 }} />
 
               }
-            </button>);
+            </motion.button>);
 
         })}
       </div>
 
-      <motion.div layout className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <AnimatePresence mode="popLayout">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <AnimatePresence mode="wait">
           {getTabData().length > 0 ?
           getTabData().map((item: any, idx: number) =>
           <motion.div
+            key={item.bookingId || item.id}
             layout
-            key={item.id}
-            initial={{
-              opacity: 0,
-              scale: 0.9
-            }}
-            animate={{
-              opacity: 1,
-              scale: 1
-            }}
-            exit={{
-              opacity: 0,
-              scale: 0.9,
-              transition: {
-                duration: 0.2
-              }
-            }}
-            transition={{
-              delay: idx * 0.05,
-              layout: {
-                type: 'spring',
-                bounce: 0.2,
-                duration: 0.6
-              }
-            }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+            transition={{ delay: idx * 0.04, type: 'spring', stiffness: 300, damping: 28 }}
             onClick={() => navigate(item.bookingId ? `/trip/${item.bookingId}` : `/landmark/${item.id}`)}
             className="bg-white dark:bg-slate-card rounded-[20px] p-4 shadow-soft dark:shadow-soft-dark border border-sand dark:border-slate-border flex gap-4 group cursor-pointer relative overflow-hidden">
             
@@ -488,16 +522,11 @@ export function Profile() {
           ) :
 
           <motion.div
-            layout
-            initial={{
-              opacity: 0
-            }}
-            animate={{
-              opacity: 1
-            }}
-            exit={{
-              opacity: 0
-            }}
+            key="empty"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+            transition={{ type: 'spring', stiffness: 300, damping: 28 }}
             className="col-span-full py-12 text-center bg-sand/20 dark:bg-slate-border/40 rounded-[20px] border border-dashed border-sand dark:border-slate-border">
             
               <p className="text-navy/50 dark:text-slate-400">
@@ -506,14 +535,15 @@ export function Profile() {
             </motion.div>
           }
         </AnimatePresence>
-      </motion.div>
+      </div>
 
       <AnimatePresence>
         {isEditOpen &&
         <EditProfileModal
           user={userData}
           onClose={() => setIsEditOpen(false)}
-          onSave={handleSave} />
+          onSave={handleSave}
+          onPasswordChange={handlePasswordChange} />
 
         }
       </AnimatePresence>
@@ -555,6 +585,30 @@ export function Profile() {
     </div>);
 
 }
+function createCroppedImage(imageSrc: string, pixelCrop: Area): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = pixelCrop.width;
+      canvas.height = pixelCrop.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(
+        img,
+        pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
+        0, 0, pixelCrop.width, pixelCrop.height
+      );
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Canvas to Blob failed'));
+      }, 'image/jpeg', 0.9);
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = imageSrc;
+  });
+}
+
 interface EditProfileModalProps {
   user: {
     name: string;
@@ -566,8 +620,9 @@ interface EditProfileModalProps {
   };
   onClose: () => void;
   onSave: (updated: any, avatarFile?: File | null) => void;
+  onPasswordChange: (passwords: { current_password: string; new_password: string; new_password_confirmation: string }) => void;
 }
-function EditProfileModal({ user, onClose, onSave }: EditProfileModalProps) {
+function EditProfileModal({ user, onClose, onSave, onPasswordChange }: EditProfileModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: user.name,
@@ -576,42 +631,78 @@ function EditProfileModal({ user, onClose, onSave }: EditProfileModalProps) {
     bio: user.bio || '',
     location: user.location || ''
   });
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    new_password: '',
+    new_password_confirmation: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  // Crop state
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [isCropping, setIsCropping] = useState(false);
+
+  const onCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+    setCroppedAreaPixels(croppedPixels);
+  }, []);
+
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setErrors({
-        ...errors,
-        avatar: 'Please upload an image file'
-      });
+      setErrors({ ...errors, avatar: 'Please upload an image file' });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setErrors({
-        ...errors,
-        avatar: 'Image must be under 5MB'
-      });
+      setErrors({ ...errors, avatar: 'Image must be under 5MB' });
       return;
     }
     const url = URL.createObjectURL(file);
     setAvatarFile(file);
-    setForm({
-      ...form,
-      avatar: url
-    });
-    setErrors({
-      ...errors,
-      avatar: ''
-    });
+    setCropImageSrc(url);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setIsCropping(true);
+    setErrors({ ...errors, avatar: '' });
   };
+
+  const handleCropConfirm = async () => {
+    if (!cropImageSrc || !croppedAreaPixels) return;
+    try {
+      const blob = await createCroppedImage(cropImageSrc, croppedAreaPixels);
+      const croppedFile = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+      const previewUrl = URL.createObjectURL(blob);
+      setAvatarFile(croppedFile);
+      setForm({ ...form, avatar: previewUrl });
+      setIsCropping(false);
+      setCropImageSrc(null);
+    } catch {
+      setErrors({ ...errors, avatar: 'Failed to crop image' });
+    }
+  };
+
+  const handleCropCancel = () => {
+    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc);
+    setCropImageSrc(null);
+    setIsCropping(false);
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) handleFileSelect(file);
   };
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!form.name.trim()) newErrors.name = 'Name is required';
@@ -620,102 +711,113 @@ function EditProfileModal({ user, onClose, onSave }: EditProfileModalProps) {
     } else if (!/\S+@\S+\.\S+/.test(form.email)) {
       newErrors.email = 'Invalid email address';
     }
-    if (form.bio.length > 200)
-    newErrors.bio = 'Bio must be under 200 characters';
+    if (form.bio.length > 200) newErrors.bio = 'Bio must be under 200 characters';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const validatePassword = () => {
+    const newErrors: Record<string, string> = {};
+    if (!passwordForm.current_password) newErrors.current_password = 'Current password is required';
+    if (!passwordForm.new_password) {
+      newErrors.new_password = 'New password is required';
+    } else if (passwordForm.new_password.length < 6) {
+      newErrors.new_password = 'Password must be at least 6 characters';
+    }
+    if (!passwordForm.new_password_confirmation) {
+      newErrors.new_password_confirmation = 'Please confirm your new password';
+    } else if (passwordForm.new_password !== passwordForm.new_password_confirmation) {
+      newErrors.new_password_confirmation = 'Passwords do not match';
+    }
+    return newErrors;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
+
+    if (showPasswordSection) {
+      const pwErrors = validatePassword();
+      if (Object.keys(pwErrors).length > 0) {
+        setErrors(pwErrors);
+        return;
+      }
+    }
+
     setIsSaving(true);
-    setTimeout(() => {
-      onSave({ ...user, ...form }, avatarFile);
-      setIsSaving(false);
-    }, 600);
+    try {
+      await new Promise<void>((resolve) => {
+        onSave({ ...user, ...form }, avatarFile);
+        setTimeout(resolve, 600);
+      });
+      if (showPasswordSection && passwordForm.current_password) {
+        setIsChangingPassword(true);
+        setPasswordError('');
+        try {
+          await onPasswordChange({
+            current_password: passwordForm.current_password,
+            new_password: passwordForm.new_password,
+            new_password_confirmation: passwordForm.new_password_confirmation
+          });
+        } catch {
+          setPasswordError('Failed to change password');
+        }
+        setIsChangingPassword(false);
+      }
+    } catch {
+      // error handled in parent
+    }
+    setIsSaving(false);
   };
+
   return (
     <motion.div
-      initial={{
-        opacity: 0
-      }}
-      animate={{
-        opacity: 1
-      }}
-      exit={{
-        opacity: 0
-      }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       className="fixed inset-0 bg-navy/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
       onClick={onClose}>
-      
+
       <motion.div
-        initial={{
-          opacity: 0,
-          scale: 0.95,
-          y: 20
-        }}
-        animate={{
-          opacity: 1,
-          scale: 1,
-          y: 0
-        }}
-        exit={{
-          opacity: 0,
-          scale: 0.95,
-          y: 20
-        }}
-        transition={{
-          type: 'spring',
-          damping: 25,
-          stiffness: 300
-        }}
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-slate-card rounded-[30px] shadow-2xl w-full max-w-lg my-8 max-h-[90vh] overflow-y-auto">
-        
+
         <div className="flex items-center justify-between p-6 border-b border-sand dark:border-slate-border sticky top-0 bg-white dark:bg-slate-card rounded-t-[30px] z-10">
           <div>
-            <h2 className="text-2xl font-serif font-bold text-navy dark:text-slate-100">
-              Edit Profile
-            </h2>
-            <p className="text-sm text-navy/60 dark:text-slate-400 mt-1">
-              Update your information and photo
-            </p>
+            <h2 className="text-2xl font-serif font-bold text-navy dark:text-slate-100">Edit Profile</h2>
+            <p className="text-sm text-navy/60 dark:text-slate-400 mt-1">Update your information and photo</p>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
             className="w-9 h-9 rounded-full hover:bg-sand/50 dark:hover:bg-slate-border flex items-center justify-center text-navy/60 dark:text-slate-400 hover:text-navy transition-colors">
-            
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-navy dark:text-slate-100 mb-3">
-              Profile picture
-            </label>
+            <label className="block text-sm font-medium text-navy dark:text-slate-100 mb-3">Profile picture</label>
             <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
               className={`relative flex items-center gap-5 p-4 rounded-2xl border-2 border-dashed transition-colors ${isDragging ? 'border-gold bg-gold/5' : 'border-sand dark:border-slate-border bg-sand/20 dark:bg-slate-border/40'}`}>
-              
+
               <div className="relative shrink-0 group">
                 <img
                   src={form.avatar}
                   alt="Profile preview"
                   className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-slate-card shadow-md" />
-                
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="absolute inset-0 bg-navy/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label="Change picture">
-                  
                   <Camera className="w-6 h-6 text-white" />
                 </button>
               </div>
@@ -725,13 +827,10 @@ function EditProfileModal({ user, onClose, onSave }: EditProfileModalProps) {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="flex items-center gap-2 text-sm font-medium text-royal dark:text-gold hover:text-gold transition-colors">
-                  
                   <Upload className="w-4 h-4" />
                   Upload new photo
                 </button>
-                <p className="text-xs text-navy/50 dark:text-slate-400 mt-1">
-                  Drag & drop or click. JPG, PNG up to 5MB.
-                </p>
+                <p className="text-xs text-navy/50 dark:text-slate-400 mt-1">Drag & drop or click. JPG, PNG up to 5MB.</p>
               </div>
 
               <input
@@ -739,147 +838,221 @@ function EditProfileModal({ user, onClose, onSave }: EditProfileModalProps) {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileSelect(file);
-                }} />
-              
+                onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFileSelect(file); }} />
             </div>
-            {errors.avatar &&
-            <p className="text-red-500 text-xs mt-2">{errors.avatar}</p>
-            }
+            {errors.avatar && <p className="text-red-500 text-xs mt-2">{errors.avatar}</p>}
           </div>
 
           <div>
-            <label
-              htmlFor="edit-name"
-              className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">
-              
-              Full name
-            </label>
+            <label htmlFor="edit-name" className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">Full name</label>
             <input
               id="edit-name"
               type="text"
               value={form.name}
-              onChange={(e) =>
-              setForm({
-                ...form,
-                name: e.target.value
-              })
-              }
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-2.5 px-4 focus:outline-none transition-colors text-navy dark:text-slate-100"
               placeholder="Your full name" />
-            
-            {errors.name &&
-            <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-            }
+            {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
           </div>
 
           <div>
-            <label
-              htmlFor="edit-email"
-              className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">
-              
-              Email
-            </label>
+            <label htmlFor="edit-email" className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">Email</label>
             <input
               id="edit-email"
               type="email"
               value={form.email}
-              onChange={(e) =>
-              setForm({
-                ...form,
-                email: e.target.value
-              })
-              }
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-2.5 px-4 focus:outline-none transition-colors text-navy dark:text-slate-100"
               placeholder="you@example.com" />
-            
-            {errors.email &&
-            <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-            }
+            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
           </div>
 
           <div>
-            <label
-              htmlFor="edit-location"
-              className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">
-              
-              Location
-            </label>
+            <label htmlFor="edit-location" className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">Location</label>
             <input
               id="edit-location"
               type="text"
               value={form.location}
-              onChange={(e) =>
-              setForm({
-                ...form,
-                location: e.target.value
-              })
-              }
+              onChange={(e) => setForm({ ...form, location: e.target.value })}
               className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-2.5 px-4 focus:outline-none transition-colors text-navy dark:text-slate-100"
               placeholder="City, Country" />
-            
           </div>
 
           <div>
             <div className="flex justify-between items-baseline mb-2">
-              <label
-                htmlFor="edit-bio"
-                className="block text-sm font-medium text-navy dark:text-slate-100">
-                
-                Bio
-              </label>
-              <span
-                className={`text-xs ${form.bio.length > 200 ? 'text-red-500' : 'text-navy/40 dark:text-slate-400'}`}>
-                
-                {form.bio.length}/200
-              </span>
+              <label htmlFor="edit-bio" className="block text-sm font-medium text-navy dark:text-slate-100">Bio</label>
+              <span className={`text-xs ${form.bio.length > 200 ? 'text-red-500' : 'text-navy/40 dark:text-slate-400'}`}>{form.bio.length}/200</span>
             </div>
             <textarea
               id="edit-bio"
               value={form.bio}
-              onChange={(e) =>
-              setForm({
-                ...form,
-                bio: e.target.value
-              })
-              }
+              onChange={(e) => setForm({ ...form, bio: e.target.value })}
               rows={3}
               className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-2.5 px-4 focus:outline-none transition-colors resize-none text-navy dark:text-slate-100"
               placeholder="Tell other travelers about yourself..." />
-            
-            {errors.bio &&
-            <p className="text-red-500 text-xs mt-1">{errors.bio}</p>
-            }
+            {errors.bio && <p className="text-red-500 text-xs mt-1">{errors.bio}</p>}
+          </div>
+
+          {/* ── Change Password Section ───────────────────── */}
+          <div className="border-t border-sand dark:border-slate-border pt-5">
+            <button
+              type="button"
+              onClick={() => { setShowPasswordSection(!showPasswordSection); setErrors({}); setPasswordError(''); }}
+              className="flex items-center gap-2 text-sm font-medium text-navy dark:text-slate-100 hover:text-gold transition-colors w-full text-left"
+            >
+              <Lock className="w-4 h-4 text-gold" />
+              Change Password
+              <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${showPasswordSection ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showPasswordSection && (
+              <div className="mt-4 space-y-4">
+                <div>
+                  <label htmlFor="current-password" className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">Current password</label>
+                  <div className="relative">
+                    <input
+                      id="current-password"
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      value={passwordForm.current_password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                      className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-2.5 px-4 focus:outline-none transition-colors text-navy dark:text-slate-100 pr-10"
+                      placeholder="Enter current password" />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-navy/40 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100">
+                      {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {errors.current_password && <p className="text-red-500 text-xs mt-1">{errors.current_password}</p>}
+                </div>
+
+                <div>
+                  <label htmlFor="new-password" className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">New password</label>
+                  <div className="relative">
+                    <input
+                      id="new-password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={passwordForm.new_password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+                      className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-2.5 px-4 focus:outline-none transition-colors text-navy dark:text-slate-100 pr-10"
+                      placeholder="Min. 6 characters" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-navy/40 dark:text-slate-400 hover:text-navy dark:hover:text-slate-100">
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {errors.new_password && <p className="text-red-500 text-xs mt-1">{errors.new_password}</p>}
+                </div>
+
+                <div>
+                  <label htmlFor="confirm-password" className="block text-sm font-medium text-navy dark:text-slate-100 mb-2">Confirm new password</label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={passwordForm.new_password_confirmation}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, new_password_confirmation: e.target.value })}
+                    className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-2.5 px-4 focus:outline-none transition-colors text-navy dark:text-slate-100"
+                    placeholder="Re-enter new password" />
+                  {errors.new_password_confirmation && <p className="text-red-500 text-xs mt-1">{errors.new_password_confirmation}</p>}
+                </div>
+
+                {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              disabled={isSaving}
+              disabled={isSaving || isChangingPassword}
               className="flex-1 px-6 py-3 border-2 border-sand dark:border-slate-border rounded-xl font-medium text-navy dark:text-slate-100 hover:bg-sand/30 dark:hover:bg-slate-border transition-colors disabled:opacity-50">
-              
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || isChangingPassword}
               className="flex-1 bg-gold text-white py-3 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-              
-              {isSaving ?
-              <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Saving...
-                </> :
-
-              'Save changes'
-              }
+              {isSaving || isChangingPassword ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+              ) : 'Save changes'}
             </button>
           </div>
         </form>
       </motion.div>
-    </motion.div>);
 
+      {/* ── Crop Overlay ───────────────────────────────────── */}
+      {isCropping && cropImageSrc && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[60] bg-navy/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={handleCropCancel}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-card rounded-[30px] shadow-2xl w-full max-w-lg overflow-hidden"
+          >
+            <div className="p-6 border-b border-sand dark:border-slate-border">
+              <h3 className="text-xl font-serif font-bold text-navy dark:text-slate-100">Adjust Photo</h3>
+              <p className="text-sm text-navy/60 dark:text-slate-400 mt-1">Crop and zoom to fit</p>
+            </div>
+
+            <div className="relative w-full h-80 bg-navy/10 dark:bg-black/40">
+              <Cropper
+                image={cropImageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+              />
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-navy/50 dark:text-slate-400 font-medium">Zoom</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="flex-1 accent-gold h-1.5 rounded-full appearance-none bg-sand/50 dark:bg-slate-border cursor-pointer"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleCropCancel}
+                  className="flex-1 px-6 py-3 border-2 border-sand dark:border-slate-border rounded-xl font-medium text-navy dark:text-slate-100 hover:bg-sand/30 dark:hover:bg-slate-border transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCropConfirm}
+                  className="flex-1 bg-gold text-white py-3 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all flex items-center justify-center gap-2"
+                >
+                  <Check className="w-4 h-4" /> Apply
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </motion.div>);
 }
+export default Profile;

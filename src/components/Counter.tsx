@@ -7,7 +7,7 @@ interface CounterProps {
   suffix?: string;
   prefix?: string;
 }
-export function Counter({
+export const Counter = React.memo(function Counter({
   from = 0,
   to,
   duration = 2,
@@ -49,4 +49,4 @@ export function Counter({
       {suffix}
     </span>);
 
-}
+});

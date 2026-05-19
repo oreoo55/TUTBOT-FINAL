@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -21,6 +21,8 @@ import {
   Send } from
 'lucide-react';
 import { api } from '../lib/api';
+import { Skeleton } from '../components/Skeleton';
+import { EmptyState } from '../components/EmptyState';
 // ---- Weather helpers (Open-Meteo — free, no API key required) ----------
 interface WeatherSnapshot {
   tempC: number;
@@ -116,21 +118,32 @@ export function LandmarkDetail() {
   const [show360, setShow360] = useState(false);
   const [landmark, setLandmark] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState('');
   const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsError, setReviewsError] = useState('');
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    api.get<any>(`/landmarks/${id}`)
-      .then(data => { setLandmark(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-    api.get<any>(`/landmarks/${id}/reviews?per_page=50`)
-      .then(data => { setReviews(data.data ?? []); })
-      .catch(() => {});
+    setDataError('');
+    const abort = new AbortController();
+    Promise.all([
+      api.get<any>(`/landmarks/${id}`, { signal: abort.signal }),
+      api.get<any>(`/landmarks/${id}/reviews?per_page=50`, { signal: abort.signal }),
+    ])
+      .then(([ld, reviewsData]) => {
+        setLandmark(ld);
+        setReviews(reviewsData.data ?? []);
+        setReviewsError('');
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) {
+          setDataError('Failed to load landmark');
+          setLoading(false);
+        }
+      });
+    return () => abort.abort();
   }, [id]);
 
   useEffect(() => {
@@ -199,7 +212,7 @@ export function LandmarkDetail() {
       const res = await api.get<any>(`/landmarks/${id}/reviews?per_page=50`);
       setReviews(res.data ?? []);
     } catch {
-      // submission failed
+      setReviewsError('Failed to submit your review. Please try again.');
     }
   };
   const handleEditReview = (review: any) => {
@@ -221,12 +234,14 @@ export function LandmarkDetail() {
       setEditingReviewId(null);
       setEditRating(0);
       setEditText('');
-      const res = await api.get<any>(`/landmarks/${id}/reviews?per_page=50`);
+      const [res, ld] = await Promise.all([
+        api.get<any>(`/landmarks/${id}/reviews?per_page=50`),
+        api.get<any>(`/landmarks/${id}`),
+      ]);
       setReviews(res.data ?? []);
-      const ld = await api.get<any>(`/landmarks/${id}`);
       setLandmark(ld);
     } catch {
-      // update failed
+      setReviewsError('Failed to update your review. Please try again.');
     }
   };
 
@@ -235,19 +250,49 @@ export function LandmarkDetail() {
       await api.delete(`/reviews/${reviewId}`);
       setDeletingReviewId(null);
       setUserReviews(prev => prev.filter(r => r.id !== reviewId));
-      const res = await api.get<any>(`/landmarks/${id}/reviews?per_page=50`);
+      const [res, ld] = await Promise.all([
+        api.get<any>(`/landmarks/${id}/reviews?per_page=50`),
+        api.get<any>(`/landmarks/${id}`),
+      ]);
       setReviews(res.data ?? []);
-      const ld = await api.get<any>(`/landmarks/${id}`);
       setLandmark(ld);
     } catch {
-      // delete failed
+      setReviewsError('Failed to delete your review. Please try again.');
     }
   };
 
   if (loading) {
     return (
-      <div className="pb-20 flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin w-10 h-10 border-4 border-gold border-t-transparent rounded-full" />
+      <div className="pb-20">
+        <Skeleton className="h-[60vh] w-full !rounded-none" />
+        <div className="max-w-7xl mx-auto px-6 -mt-32 relative z-20">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-8">
+              <Skeleton className="h-96 rounded-[30px]" />
+              <Skeleton className="h-64 rounded-[30px]" />
+            </div>
+            <div className="space-y-6">
+              <Skeleton className="h-72 rounded-[30px]" />
+              <Skeleton className="h-48 rounded-[30px]" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (dataError) {
+    return (
+      <div className="pb-20 flex flex-col items-center justify-center min-h-[60vh]">
+        <p className="text-navy/60 dark:text-slate-300/60 text-lg mb-4">{dataError}</p>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => window.location.reload()}
+          className="bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors"
+        >
+          Retry
+        </motion.button>
       </div>
     );
   }
@@ -281,15 +326,20 @@ export function LandmarkDetail() {
         
         <div className="absolute inset-0 bg-gradient-to-t from-offwhite via-navy/20 to-navy/40" />
 
-        <button
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           onClick={() => navigate(-1)}
           className="absolute top-6 left-6 glass text-white p-3 rounded-full hover:bg-white/20 transition-colors z-10">
           
           <ArrowLeft className="w-5 h-5" />
-        </button>
+        </motion.button>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 -mt-32 relative z-20">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-7xl mx-auto px-6 -mt-32 relative z-20">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
@@ -384,6 +434,14 @@ export function LandmarkDetail() {
 
               {/* User-submitted reviews appear first */}
               <div className="space-y-6">
+                {userReviews.length === 0 && reviews.length === 0 && !reviewsError ? (
+                  <EmptyState
+                    icon={Star}
+                    title="No reviews yet"
+                    description="Be the first to share your experience!"
+                  />
+                ) : (
+                <>
                 {userReviews.map((r) =>
                 <div
                   key={r.id}
@@ -391,7 +449,8 @@ export function LandmarkDetail() {
                   
                     <div className="flex items-center justify-between mb-2">
                       <div>
-                        <h4 className="font-medium text-navy dark:text-slate-100 text-sm">
+                        <h4 className="font-medium text-navy dark:text-slate-100 text-sm cursor-pointer hover:text-royal dark:hover:text-gold transition-colors"
+                            onClick={() => r.user?.id && navigate(`/user/${r.user.id}`)}>
                           {r.name}
                         </h4>
                         <p className="text-xs text-navy/50 dark:text-slate-300/50">
@@ -424,6 +483,9 @@ export function LandmarkDetail() {
                   </div>
                 )}
 
+                {reviewsError && (
+                  <p className="text-sm text-navy/50 dark:text-slate-400 text-center py-4">{reviewsError}</p>
+                )}
                 {reviews.map((review: any) => {
                   const isOwn = currentUser && review.user?.id === currentUser.id;
                   const isEditing = editingReviewId === review.id;
@@ -537,6 +599,8 @@ export function LandmarkDetail() {
                     </div>
                   );
                 })}
+                </>
+                )}
               </div>
 
               {/* Submit a review form */}
@@ -610,8 +674,10 @@ export function LandmarkDetail() {
                     
                   </div>
 
-                  <button
+                  <motion.button
                     type="submit"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
                     disabled={
                     !reviewText.trim() ||
                     reviewRating === 0
@@ -619,7 +685,7 @@ export function LandmarkDetail() {
                     className="inline-flex items-center gap-2 bg-gold text-white px-6 py-2.5 rounded-xl font-medium hover:bg-gold/90 transition-colors shadow-glow disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
                     
                     <Send className="w-4 h-4" /> Submit Review
-                  </button>
+                  </motion.button>
                 </form>
               </div>
             </div>
@@ -638,19 +704,23 @@ export function LandmarkDetail() {
                 </div>
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setShow360(true)}
                 className="w-full mb-4 bg-royal/5 text-royal dark:text-gold border border-royal/20 py-3 rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-royal/10 transition-colors">
                 
                 <Eye className="w-5 h-5" /> Virtual 360° Tour
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => navigate(`/book/${landmark.id}`)}
-                className="w-full bg-gold text-white py-4 rounded-xl font-medium shadow-glow hover:bg-gold/90 transition-colors text-lg animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite] hover:animate-none">
+                className="w-full bg-gold text-white py-4 rounded-xl font-medium shadow-glow hover:bg-gold/90 transition-colors text-lg">
                 
                 Book Ticket Now
-              </button>
+              </motion.button>
 
               <p className="text-center text-xs text-navy/40 dark:text-slate-300/40 mt-4">
                 Secure booking via TUTBOT. Free cancellation up to 24h before.
@@ -665,7 +735,7 @@ export function LandmarkDetail() {
             
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Functional 360° Street View Modal */}
       <AnimatePresence>

@@ -7,13 +7,14 @@ use App\Models\Landmark;
 use App\Models\Notification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class BookingController extends Controller
 {
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $rules = [
             'landmark_id' => 'required|exists:landmarks,id',
             'booking_date' => 'required|date|after_or_equal:today',
             'adults' => 'required|integer|min:1|max:50',
@@ -22,7 +23,12 @@ class BookingController extends Controller
             'payer_details.name' => 'required|string|max:120',
             'payer_details.email' => 'required|email|max:190',
             'payer_details.phone' => 'nullable|string|max:40',
-        ]);
+        ];
+
+        $rules['receipt_base64'] = 'nullable|string';
+        $rules['receipt_extension'] = 'nullable|string|in:png,jpg,jpeg,webp';
+
+        $validated = $request->validate($rules);
 
         $landmark = Landmark::findOrFail((int) $validated['landmark_id']);
         $price = $landmark->price;
@@ -39,6 +45,20 @@ class BookingController extends Controller
 
         $qrToken = bin2hex(random_bytes(32));
 
+        // Determine payment status: vodafone/instapay require admin approval
+        $paymentMethod = $validated['payment_method'];
+        $paymentStatus = ($paymentMethod === 'cash' || $paymentMethod === 'vodafone' || $paymentMethod === 'instapay') ? 'pending' : 'paid';
+
+        // Store receipt file if uploaded as base64
+        $receiptPath = null;
+        if (!empty($validated['receipt_base64'])) {
+            $ext = $validated['receipt_extension'] ?? 'png';
+            $data = base64_decode($validated['receipt_base64']);
+            $filename = 'receipts/' . uniqid() . '.' . $ext;
+            Storage::disk('public')->put($filename, $data);
+            $receiptPath = $filename;
+        }
+
         $booking = Booking::create([
             'user_id' => $request->user()->id,
             'landmark_id' => $landmark->id,
@@ -49,8 +69,9 @@ class BookingController extends Controller
             'service_fee' => $serviceFee,
             'total' => $total,
             'currency' => 'EGP',
-            'payment_method' => $validated['payment_method'],
-            'payment_status' => $validated['payment_method'] === 'cash' ? 'pending' : 'paid',
+            'payment_method' => $paymentMethod,
+            'payment_status' => $paymentStatus,
+            'receipt_path' => $receiptPath,
             'status' => 'confirmed',
             'confirmation_code' => $confirmationCode,
             'qr_token' => $qrToken,
@@ -237,6 +258,7 @@ class BookingController extends Controller
             'currency' => $b->currency,
             'payment_method' => $b->payment_method,
             'payment_status' => $b->payment_status,
+            'receipt_url' => $b->receipt_path ? Storage::url($b->receipt_path) : null,
             'qr_token' => $b->qr_token,
             'payer_name' => $b->payer_name,
             'payer_email' => $b->payer_email,

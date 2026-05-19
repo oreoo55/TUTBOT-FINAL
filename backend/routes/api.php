@@ -24,6 +24,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/me', [AuthController::class, 'update']);
+    Route::post('/me/password', [AuthController::class, 'changePassword']);
 
     // ─── Favorites ───────────────────────────────────────────────────
     Route::get('/me/favorites', [FavoriteController::class, 'index']);
@@ -93,6 +94,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // QR verification
     Route::post('/bookings/verify-qr', [AdminController::class, 'verifyQr']);
 
+    // Payment approvals
+    Route::get('/payments', [AdminController::class, 'listPayments']);
+    Route::post('/payments/{id}/approve', [AdminController::class, 'approvePayment']);
+    Route::post('/payments/{id}/reject', [AdminController::class, 'rejectPayment']);
+
     // Direct admin cancel
     Route::post('/bookings/{id}/cancel', [AdminController::class, 'cancelBooking']);
 
@@ -104,6 +110,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 
     // Admin user list + notifications
     Route::get('/users', [AdminController::class, 'listUsers']);
+    Route::get('/users/detailed', [AdminController::class, 'listUsersDetailed']);
     Route::post('/users/notify', [AdminController::class, 'sendNotification']);
 });
 

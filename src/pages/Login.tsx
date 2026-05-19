@@ -25,6 +25,8 @@ export function Login() {
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const loginEmailRef = useRef<HTMLInputElement>(null);
+  const loginPasswordRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<FormData>({
     email: '',
     password: '',
@@ -94,21 +96,23 @@ export function Login() {
   };
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const email = loginEmailRef.current?.value?.trim() || '';
+    const password = loginPasswordRef.current?.value || '';
     const newErrors: Partial<Record<keyof FormData, string>> = {};
-    if (!formData.email.trim()) {
+    if (!email) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
       newErrors.email = 'Invalid email address';
     }
-    if (!formData.password) {
+    if (!password) {
       newErrors.password = 'Password is required';
     }
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
         const res = await api.post<AuthResponse>('/auth/login', {
-          email: formData.email,
-          password: formData.password,
+          email,
+          password,
         });
         setAuthToken(res.token);
         if (res.user.is_admin) {
@@ -341,7 +345,7 @@ export function Login() {
                 key={view}
                 custom={direction}
                 variants={slideVariants}
-                initial="enter"
+                initial={view === 'login' ? 'center' : 'enter'}
                 animate="center"
                 exit="exit"
                 transition={{
@@ -409,20 +413,17 @@ export function Login() {
                     </div>
 
                     {/* Login Form */}
-                    <form onSubmit={handleLogin} className="space-y-4">
+                    <form onSubmit={handleLogin} autoComplete="on" className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-navy dark:text-slate-200 mb-2">
+                        <label htmlFor="login-email" className="block text-sm font-medium text-navy dark:text-slate-200 mb-2">
                           Email
                         </label>
                         <input
+                        id="login-email"
                         type="email"
-                        value={formData.email}
-                        onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          email: e.target.value
-                        })
-                        }
+                        name="email"
+                        autoComplete="email"
+                        ref={loginEmailRef}
                         className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-3 px-4 focus:outline-none transition-colors text-navy dark:text-slate-100 placeholder:text-navy/40 dark:placeholder:text-slate-400"
                         placeholder="you@example.com" />
                       
@@ -432,21 +433,17 @@ export function Login() {
                           </p>
                       }
                       </div>
-
                       <div>
-                        <label className="block text-sm font-medium text-navy dark:text-slate-200 mb-2">
+                        <label htmlFor="login-password" className="block text-sm font-medium text-navy dark:text-slate-200 mb-2">
                           Password
                         </label>
                         <div className="relative">
                           <input
+                          id="login-password"
                           type={showPassword ? 'text' : 'password'}
-                          value={formData.password}
-                          onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            password: e.target.value
-                          })
-                          }
+                          name="password"
+                          autoComplete="current-password"
+                          ref={loginPasswordRef}
                           className="w-full bg-white dark:bg-slate-card border-2 border-sand dark:border-slate-border focus:border-gold rounded-xl py-3 px-4 pr-12 focus:outline-none transition-colors text-navy dark:text-slate-100 placeholder:text-navy/40 dark:placeholder:text-slate-400"
                           placeholder="Enter your password" />
                         
@@ -492,7 +489,7 @@ export function Login() {
                         </div>
                         <button
                         type="button"
-                        onClick={() => goToView('forgot')}
+                        onClick={() => { setFormData(prev => ({ ...prev, email: loginEmailRef.current?.value?.trim() || prev.email })); goToView('forgot'); }}
                         className="text-sm text-royal dark:text-gold hover:text-gold transition-colors">
                         
                           Forgot password?
