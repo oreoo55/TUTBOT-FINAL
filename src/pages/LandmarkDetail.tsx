@@ -372,12 +372,6 @@ export function LandmarkDetail() {
               </h3>
               <p className="text-navy/70 dark:text-slate-300/70 leading-relaxed mb-8">
                 {landmark.description}
-                <br />
-                <br />
-                Experience the grandeur of ancient history. This site offers a
-                profound glimpse into the architectural and cultural
-                achievements of its era, preserved through millennia for modern
-                explorers to witness.
               </p>
 
               {/* Quick facts — sourced from mockData for this landmark */}

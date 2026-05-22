@@ -71,7 +71,7 @@ class LandmarkController extends Controller
             $query->orderBy('name');
         }
 
-        $perPage = min((int) $request->query('per_page', 20), 100);
+        $perPage = min((int) $request->query('per_page', 20), 500);
         $landmarks = $query->paginate($perPage);
 
         $landmarks->getCollection()->transform(fn($l) => $this->landmarkResponse($l));

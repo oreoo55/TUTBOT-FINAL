@@ -188,6 +188,26 @@ class LandmarkSeeder extends Seeder
         113 => 'https://images.unsplash.com/photo-1505228395891-9a51e7e86bf6?auto=format&fit=crop&w=1200&q=80',
         114 => 'https://images.unsplash.com/photo-1573155993874-d5d48af862ba?auto=format&fit=crop&w=1200&q=80',
         115 => 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Shali_Fortress23.jpg/1280px-Shali_Fortress23.jpg',
+        116 => 'https://images.unsplash.com/photo-1572252009286-268acec5ca0a?auto=format&fit=crop&w=1200&q=80',
+        117 => 'https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=1200&q=80',
+        118 => 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=1200&q=80',
+        119 => 'https://images.unsplash.com/photo-1568322445389-f64ac2515020?auto=format&fit=crop&w=1200&q=80',
+        120 => 'https://images.unsplash.com/photo-1503152394-c571994fd383?auto=format&fit=crop&w=1200&q=80',
+        121 => 'https://images.unsplash.com/photo-1517495306984-f84210f9daa8?auto=format&fit=crop&w=1200&q=80',
+        122 => 'https://images.unsplash.com/photo-1573155993874-d5d48af862ba?auto=format&fit=crop&w=1200&q=80',
+        123 => 'https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?auto=format&fit=crop&w=1200&q=80',
+        125 => 'https://images.unsplash.com/photo-1543272127-c46b7a7a8e89?auto=format&fit=crop&w=1200&q=80',
+        126 => 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+        127 => 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=1200&q=80',
+        128 => 'https://images.unsplash.com/photo-1505228395891-9a51e7e86bf6?auto=format&fit=crop&w=1200&q=80',
+        129 => 'https://images.unsplash.com/photo-1568322445389-f64ac2515020?auto=format&fit=crop&w=1200&q=80',
+        130 => 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=1200&q=80',
+        131 => 'https://images.unsplash.com/photo-1505228395891-9a51e7e86bf6?auto=format&fit=crop&w=1200&q=80',
+        135 => 'https://images.unsplash.com/photo-1548276145-69a9521f0499?auto=format&fit=crop&w=1200&q=80',
+     ];
+
+    private array $eraOverrides = [
+        132 => 'Modern', // El Alamein War Memorial (WW2, not Ancient Egyptian)
     ];
 
     public function run(): void
@@ -209,8 +229,8 @@ class LandmarkSeeder extends Seeder
                 'area' => $p['Area'],
                 'category' => $category,
                 'raw_category' => $rawCat,
-                'era' => $this->eraForCategory($rawCat),
-                'description' => $this->generateDescription($p['Place_Name'], $p['City_Name'], $rawCat),
+                'era' => $this->eraOverrides[$placeId] ?? $this->eraForCategory($rawCat),
+                'description' => $p['Description'] ?? $this->generateDescription($p, $rawCat),
                 'image' => $image,
                 'fallback_image' => $this->categoryImages[$rawCat][0] ?? null,
                 'panorama_url' => $this->panoramaUrl($p),
@@ -262,23 +282,66 @@ class LandmarkSeeder extends Seeder
         };
     }
 
-    private function generateDescription(string $name, string $city, string $rawCat): string
+    private function generateDescription(array $p, string $rawCat): string
     {
-        $categoryLabels = [
-            'museum' => 'museum',
-            'historical_site' => 'historical site',
-            'mosque' => 'mosque',
-            'church' => 'church',
-            'park' => 'park',
-            'entertainment' => 'entertainment venue',
-            'tourist_attraction' => 'tourist attraction',
-            'market' => 'market',
-            'cultural_landmark' => 'cultural landmark',
-            'natural_landmark' => 'natural landmark',
-            'beach' => 'beach',
+        $name = $p['Place_Name'];
+        $city = $p['City_Name'];
+        $gov = $p['Governorate_Name'];
+        $inCity = stripos($name, $city) === false ? " in $city" : '';
+        $inGov = stripos($name, $gov) === false ? " in $gov" : '';
+
+        $stories = [
+            'historical_site' => [
+                "Standing in the heart of $city, $name is one of Egypt's most captivating historical sites. For centuries, this remarkable place in $gov Governorate has drawn visitors from around the world, offering an unforgettable journey into the past where every stone tells a story of pharaohs, builders, and ancient traditions.",
+                "Nestled$inCity within $gov Governorate, $name transports you back through millennia. This extraordinary historical site showcases the architectural genius of ancient Egypt, with its towering structures and intricate carvings that have withstood the test of time.",
+                "$name$inCity, $gov is a treasure of Egyptian heritage. As you wander through this ancient site, you can almost hear the echoes of ceremonies and daily life that unfolded here thousands of years ago.",
+            ],
+            'museum' => [
+                "Housed in the heart of $city, $name is a premier museum in $gov Governorate. Its carefully curated collections span Egypt's glorious history, from prehistoric times through the pharaonic era to the modern age, making it an essential stop for anyone wanting to understand this remarkable civilization.",
+                "$name$inCity offers an unparalleled journey through Egypt's rich cultural tapestry. The exhibits within this $gov museum showcase artifacts that have survived for millennia, each piece telling its own unique story of a bygone era.",
+            ],
+            'mosque' => [
+                "The stunning $name stands as a masterpiece of Islamic architecture$inCity, $gov. Its minarets and domes dominate the skyline, inviting worshippers and visitors alike to marvel at centuries of artistic and spiritual tradition that continue to thrive within its walls.",
+                "$name$inCity is one of the most revered mosques in $gov Governorate. The intricate geometric patterns, soaring arches, and peaceful courtyards reflect the height of Islamic artistic achievement and spiritual devotion.",
+            ],
+            'church' => [
+                "$name$inCity is a sacred sanctuary that bears witness to Egypt's enduring Christian heritage. Located in $gov Governorate, this historic church has been a place of worship, reflection, and pilgrimage for generations of believers.",
+                "Tucked away$inCity, $name represents the rich tapestry of Egypt's Coptic Christian tradition. This holy site in $gov Governorate draws visitors with its ancient icons, peaceful atmosphere, and deep spiritual significance.",
+            ],
+            'park' => [
+                "Escape the bustle of $city and immerse yourself in the tranquility of $name. This beautiful green space in $gov Governorate offers a refreshing retreat where locals and tourists alike can relax, stroll, and enjoy nature's beauty.",
+                "$name is the perfect spot to unwind$inCity, $gov. With its lush landscapes and serene pathways, this beloved park provides a peaceful oasis amid the vibrant energy of the region.",
+            ],
+            'natural_landmark' => [
+                "$name$inCity, $gov is one of Egypt's most breathtaking natural wonders. The raw beauty of this landscape — shaped by wind, water, and time — offers an awe-inspiring experience that connects visitors to the powerful forces of nature.",
+                "Nature reveals its majesty at $name$inCity. Located in $gov Governorate, this stunning natural landmark showcases dramatic landscapes and unique geological formations that have evolved over millions of years.",
+            ],
+            'beach' => [
+                "With its pristine sands and crystal-clear waters, $name is the ultimate beach destination$inCity, $gov. Whether you seek relaxation under the sun or adventure beneath the waves, this stunning coastline delivers an unforgettable seaside experience.",
+                "$name along the $gov coastline$inCity is a slice of paradise. The turquoise waters and golden sands create a perfect setting for swimming, snorkeling, and soaking up the warm Egyptian sun.",
+            ],
+            'market' => [
+                "Dive into the vibrant atmosphere of $name$inCity, where the sights, sounds, and scents of a traditional Egyptian market come alive. This bustling marketplace in $gov Governorate has been a center of commerce and culture for generations.",
+                "$name is the beating heart of $city's commercial and social life. Wandering through this lively market in $gov Governorate, you'll discover handcrafted treasures, aromatic spices, and the warm hospitality that Egypt is famous for.",
+            ],
+            'entertainment' => [
+                "For fun and excitement in $city, look no further than $name. This premier entertainment destination in $gov Governorate offers activities and attractions that delight visitors of all ages, making it a perfect family outing.",
+                "$name brings joy and adventure$inCity, $gov. Packed with thrilling attractions and entertaining experiences, this venue is a favorite among locals and tourists looking for a memorable day out.",
+            ],
+            'tourist_attraction' => [
+                "$name is a must-visit destination$inCity, $gov Governorate. Blending natural beauty with cultural richness, this attraction offers something for every traveler — from breathtaking views to immersive local experiences.",
+                "Discover the magic of $name$inCity, one of the most popular tourist destinations in $gov Governorate. This vibrant locale captures the essence of Egyptian hospitality and the diverse beauty of the region.",
+            ],
+            'cultural_landmark' => [
+                "$name stands as a proud symbol of $city's cultural identity in $gov Governorate. This landmark celebrates the artistic, architectural, and social achievements that have shaped the character of this remarkable region.",
+                "In the heart of $city lies $name, a cultural landmark that embodies the spirit and heritage of $gov Governorate. Visitors leave with a deeper appreciation for Egypt's rich and diverse cultural traditions.",
+            ],
         ];
 
-        $label = $categoryLabels[$rawCat] ?? 'landmark';
-        return "Explore $name, a fascinating $label located in $city, Egypt. This destination offers a unique glimpse into Egypt's rich heritage and natural beauty.";
+        $pool = $stories[$rawCat] ?? [
+            "Explore $name$inCity, $gov Governorate — a captivating destination that showcases the very best of what Egypt has to offer. From its rich history to its warm hospitality, every visit here is a memorable experience.",
+        ];
+
+        return $pool[$p['Place_ID'] % count($pool)];
     }
 }

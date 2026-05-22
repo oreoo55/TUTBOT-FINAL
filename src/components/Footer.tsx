@@ -73,20 +73,14 @@ export function Footer() {
           <ul className="space-y-3">
             {[
               { label: 'Destinations', to: '/discover' },
-              { label: 'Archaeological Sites', href: '#' },
-              { label: 'Religious Landmarks', href: '#' },
-              { label: 'Recreational', href: '#' },
+              { label: 'Archaeological Sites', to: '/discover' },
+              { label: 'Religious Landmarks', to: '/discover' },
+              { label: 'Recreational', to: '/discover' },
             ].map((item) => (
               <li key={item.label}>
-                {item.to ? (
-                  <Link to={item.to} className="text-white/70 hover:text-white transition-colors text-sm">
-                    {item.label}
-                  </Link>
-                ) : (
-                  <a href={item.href} className="text-white/70 hover:text-white transition-colors text-sm">
-                    {item.label}
-                  </a>
-                )}
+                <Link to={item.to} className="text-white/70 hover:text-white transition-colors text-sm">
+                  {item.label}
+                </Link>
               </li>
             ))}
           </ul>
@@ -95,13 +89,9 @@ export function Footer() {
         <motion.div variants={fadeUp}>
           <h4 className="font-serif text-xl font-semibold mb-6 text-gold">Company</h4>
           <ul className="space-y-3">
-            {['About Us', 'Community', 'Careers', 'Contact'].map((label) => (
-              <li key={label}>
-                <a href="#" className="text-white/70 hover:text-white transition-colors text-sm">
-                  {label}
-                </a>
-              </li>
-            ))}
+            <li><Link to="/about" className="text-white/70 hover:text-white transition-colors text-sm">About Us</Link></li>
+            <li><Link to="/community" className="text-white/70 hover:text-white transition-colors text-sm">Community</Link></li>
+            <li><Link to="/help" className="text-white/70 hover:text-white transition-colors text-sm">Contact</Link></li>
           </ul>
         </motion.div>
 

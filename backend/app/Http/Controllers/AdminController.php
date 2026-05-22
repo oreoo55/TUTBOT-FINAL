@@ -161,8 +161,13 @@ class AdminController extends Controller
     {
         $this->ensureAdmin($request);
 
-        $post = Post::findOrFail((int) $id);
+        $post = Post::withCount('comments')->findOrFail((int) $id);
+        $commentsCount = $post->comments_count;
         $post->delete();
+
+        if ($landmark = $post->landmark) {
+            $landmark->decrement('comments_count', $commentsCount);
+        }
 
         return response()->json(null, 204);
     }
@@ -172,7 +177,12 @@ class AdminController extends Controller
         $this->ensureAdmin($request);
 
         $comment = Comment::findOrFail((int) $id);
+        $post = $comment->post;
         $comment->delete();
+
+        if ($post) {
+            $post->decrement('comments_count');
+        }
 
         return response()->json(null, 204);
     }
@@ -540,7 +550,7 @@ class AdminController extends Controller
 
         $wasRefunded = $booking->payment_status === 'refunded';
         $booking->update($validated);
-        $booking->load('landmark');
+        $booking->load('user', 'landmark');
 
         if (isset($validated['payment_status']) && $validated['payment_status'] === 'refunded' && !$wasRefunded) {
             $landmarkName = $booking->landmark?->name ?? 'Booking';

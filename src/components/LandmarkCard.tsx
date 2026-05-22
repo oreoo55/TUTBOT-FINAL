@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, Bookmark, MapPin, Star, Eye } from 'lucide-react';
+import { Heart, Bookmark, MapPin, Star, Eye, X } from 'lucide-react';
 import {
   useUserCollections,
   Landmark } from
 '../contexts/UserCollectionsContext';
+
+const panoramaUrl = (lat: number, lng: number) =>
+  `https://www.google.com/maps?q=&layer=c&cbll=${lat},${lng}&cbp=11,0,0,0,0&output=svembed`;
 interface LandmarkCardProps {
   landmark: Landmark;
   variant?: 'default' | 'tall';
@@ -28,7 +31,8 @@ export const LandmarkCard = React.memo(function LandmarkCard({
     toggleWishlist(landmark);
   };
   const isTall = variant === 'tall';
-  return (
+  const [show360, setShow360] = useState(false);
+  return (<>
     <motion.div
       whileHover={{
         y: -4
@@ -137,10 +141,25 @@ export const LandmarkCard = React.memo(function LandmarkCard({
           </QuickActionButton>
         </div>
 
-        {/* 360° Preview button - center on hover */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none">
-          <button className="bg-white/20 backdrop-blur-md border border-white/50 text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium pointer-events-auto hover:bg-white/30 transition-colors">
+        {/* Hover overlay buttons */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShow360(true);
+            }}
+            className="bg-white/20 backdrop-blur-md border border-white/50 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 hover:scale-105 transition-all duration-200"
+          >
             <Eye className="w-4 h-4" /> 360° Preview
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/landmark/${landmark.id}`);
+            }}
+            className="bg-gold/80 backdrop-blur-md border border-gold/50 text-white px-5 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-gold hover:scale-105 transition-all duration-200"
+          >
+            View Landmark
           </button>
         </div>
 
@@ -182,7 +201,36 @@ export const LandmarkCard = React.memo(function LandmarkCard({
           </div>
         </div>
       }
-    </motion.div>);
+    </motion.div>
+
+      {/* 360° Preview Modal */}
+      {show360 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setShow360(false)}
+        >
+          <div
+            className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShow360(false)}
+              className="absolute top-3 right-3 z-10 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <iframe
+              src={panoramaUrl(landmark.lat, landmark.lng)}
+              className="w-full h-full border-0"
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              title={`360° view of ${landmark.name}`}
+            />
+          </div>
+        </div>
+      )}
+    </>);
 
 });
 interface QuickActionButtonProps {

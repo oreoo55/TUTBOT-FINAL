@@ -45,7 +45,7 @@ export function Landing() {
   useEffect(() => {
     setLandmarksLoading(true);
     const abort = new AbortController();
-    api.get<any>('/landmarks?sort=rating&per_page=100', { signal: abort.signal }).then(res => {
+    api.get<any>('/landmarks?sort=rating&per_page=200', { signal: abort.signal }).then(res => {
       const items = res.data || [];
       setAllLandmarks(items);
       const sorted = [...items].sort((a: any, b: any) => b.rating - a.rating || (b.reviews_count ?? 0) - (a.reviews_count ?? 0));

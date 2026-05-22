@@ -48,7 +48,7 @@ interface PostItem {
   landmark?: { id: number; name: string };
   location: string;
   category: string;
-  excerpt: string;
+  text: string;
   image: string | null;
   created_at: string;
 }
@@ -56,7 +56,7 @@ interface PostItem {
 interface CommentItem {
   id: number;
   user: { id: number; name: string; avatar: string | null; email?: string };
-  post?: { id: number };
+  post?: { id: number; landmark?: { id: number; name: string } };
   text: string;
   created_at: string;
 }
@@ -556,11 +556,12 @@ export function AdminDashboard() {
         } else {
           await api.put(`/admin/landmarks/${editingLandmark.id}`, body);
         }
+        setLandmarks(prev => prev.map(l => l.id === editingLandmark.id ? { ...l, ...landmarkForm } : l));
       } else {
-        await api.post('/admin/landmarks', body);
+        const created = await api.post<any>('/admin/landmarks', body);
+        setLandmarks(prev => [...prev, created]);
       }
       setShowLandmarkModal(false);
-      fetchLandmarks();
     } catch (err: any) {
       setError(err.body?.message ?? 'Failed to save landmark');
     }
@@ -569,12 +570,13 @@ export function AdminDashboard() {
 
   const handleDeleteLandmark = async () => {
     if (!deleteLandmarkId) return;
+    setLandmarks(prev => prev.filter(l => l.id !== deleteLandmarkId));
     try {
       await api.delete(`/admin/landmarks/${deleteLandmarkId}`);
       setDeleteLandmarkId(null);
-      fetchLandmarks();
     } catch {
       setError('Failed to delete landmark');
+      fetchLandmarks();
     }
   };
 
@@ -582,13 +584,18 @@ export function AdminDashboard() {
 
   const handleDeleteItem = async () => {
     if (!deleteItem) return;
+    const { type, id } = deleteItem;
+    // Optimistically remove from local state
+    if (type === 'reviews') setReviews(prev => prev.filter(r => r.id !== id));
+    else if (type === 'posts') setPosts(prev => prev.filter(p => p.id !== id));
+    else setComments(prev => prev.filter(c => c.id !== id));
     try {
-      await api.delete(`/admin/${deleteItem.type}/${deleteItem.id}`);
-      setDeleteItem(null);
-      fetchModeration();
+      await api.delete(`/admin/${type}/${id}`);
     } catch {
       setError('Failed to delete');
+      fetchModeration(); // revert on error by re-fetching
     }
+    setDeleteItem(null);
   };
 
   // ─── Delete Booking ──────────────────────────────────────────────
@@ -627,8 +634,9 @@ export function AdminDashboard() {
       if (editBookingData.payer_email) payload.payer_email = editBookingData.payer_email;
       if (editBookingData.payer_phone !== undefined) payload.payer_phone = editBookingData.payer_phone;
       await api.put(`/admin/bookings/${id}`, payload);
+      // Merge updated fields into existing booking to preserve user/landmark relations
+      setBookings(prev => prev.map(b => Number(b.id) === id ? { ...b, ...payload } : b));
       setEditBookingData(null);
-      fetchBookings();
     } catch {
       setError('Failed to update booking');
     }
@@ -650,7 +658,7 @@ export function AdminDashboard() {
     setCancellingBookingId(id);
     try {
       await api.post(`/admin/bookings/${id}/cancel`, { reason: cancelReason || undefined });
-      setBookings(prev => prev.filter(b => Number(b.id) !== id));
+      setBookings(prev => prev.map(b => Number(b.id) === id ? { ...b, status: 'cancelled' } : b));
       setCancelModalBookingId(null);
       setCancelReason('');
     } catch {
@@ -1426,13 +1434,14 @@ export function AdminDashboard() {
                   <button
                     onClick={async () => {
                       if (!confirm(`Delete ${selectedModIds.size} items?`)) return;
+                      const idsToDelete = new Set(selectedModIds);
+                      if (modSubTab === 'reviews') setReviews(prev => prev.filter(r => !idsToDelete.has(r.id)));
+                      else if (modSubTab === 'posts') setPosts(prev => prev.filter(p => !idsToDelete.has(p.id)));
+                      else setComments(prev => prev.filter(c => !idsToDelete.has(c.id)));
+                      setSelectedModIds(new Set());
                       setBulkDeleting(true);
                       try {
-                        await Promise.all(
-                          [...selectedModIds].map(id => api.delete(`/admin/${modSubTab}/${id}`))
-                        );
-                        setSelectedModIds(new Set());
-                        fetchModeration();
+                        await Promise.all([...idsToDelete].map(id => api.delete(`/admin/${modSubTab}/${id}`)));
                       } catch {
                         setError('Failed to delete some items');
                       }
@@ -1470,8 +1479,8 @@ export function AdminDashboard() {
                           />
                         </th>
                         <th className="px-4 py-3">User</th>
-                        {modSubTab !== 'comments' && <th className="px-4 py-3">Content</th>}
-                        {modSubTab === 'reviews' && <th className="px-4 py-3">Landmark</th>}
+                        <th className="px-4 py-3">Content</th>
+                        {modSubTab !== 'comments' && <th className="px-4 py-3">Landmark</th>}
                         {modSubTab === 'reviews' && <th className="px-4 py-3">Rating</th>}
                         {modSubTab === 'posts' && <th className="px-4 py-3">Location</th>}
                         <th className="px-4 py-3">Date</th>
@@ -1497,19 +1506,12 @@ export function AdminDashboard() {
                               />
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-royal/20 flex items-center justify-center text-xs font-bold text-royal">
-                                  {item.user.name.charAt(0)}
-                                </div>
-                                <span>{item.user.name}</span>
-                              </div>
+                              <span className="text-navy dark:text-slate-200 font-medium">{item.user.name}</span>
+                            </td>
+                            <td className="px-4 py-3 max-w-xs truncate">
+                              {modSubTab === 'reviews' ? (r.text || '-') : modSubTab === 'posts' ? (p.text || '-') : (item.text || '-')}
                             </td>
                             {modSubTab !== 'comments' && (
-                              <td className="px-4 py-3 max-w-xs truncate">
-                                {modSubTab === 'reviews' ? (r.text || '-') : (p.excerpt || '-')}
-                              </td>
-                            )}
-                            {modSubTab === 'reviews' && (
                               <td className="px-4 py-3">{r.landmark?.name ?? '-'}</td>
                             )}
                             {modSubTab === 'reviews' && (

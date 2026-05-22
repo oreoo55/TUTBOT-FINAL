@@ -124,7 +124,7 @@ export function Discover() {
   const [categories, setCategories] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState<'loading' | 'error' | 'loaded'>('loading');
   useEffect(() => {
-    api.get<any>('/landmarks?per_page=100').then(res => {
+    api.get<any>('/landmarks?per_page=200').then(res => {
       const items = Array.isArray(res) ? res : (res.data ?? []);
       setAllLandmarks(items);
       setCategories(Array.from(new Set<string>(items.map((l: any) => l.category))).sort());
