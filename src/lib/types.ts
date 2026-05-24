@@ -153,6 +153,7 @@ export interface AiMessage {
   role: AiRole;
   content: string;
   suggestions?: AiSuggestion[];
+  source?: 'llm' | 'fallback' | 'canned';
 }
 
 export type AiSuggestion =
@@ -171,6 +172,12 @@ export interface AiChatRequest {
 export interface AiChatResponse {
   conversation_id: string;
   message: AiMessage;
+}
+
+export interface QuickAction {
+  key: string;
+  label: string;
+  prompt: string;
 }
 
 // =============================================================================

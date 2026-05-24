@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -43,7 +44,12 @@ return new class extends Migration
             $table->index('region', 'idx_landmarks_region');
             $table->index('category', 'idx_landmarks_category');
             $table->index('rating', 'idx_landmarks_rating');
-            $table->fullText(['name', 'description'], 'ftx_landmarks_search');
+
+            if (DB::getDriverName() === 'sqlite') {
+                $table->index('name', 'idx_landmarks_name');
+            } else {
+                $table->fullText(['name', 'description'], 'ftx_landmarks_search');
+            }
         });
     }
 

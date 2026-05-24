@@ -134,5 +134,9 @@ Route::get('/users/{id}/posts', [UserController::class, 'posts']);
 Route::get('/users/{id}/reviews', [UserController::class, 'reviews']);
 
 // ─── AI (public with optional auth) ─────────────────────────────────
-Route::post('/ai/chat', [AiController::class, 'chat'])->middleware('auth:sanctum');
+Route::post('/ai/chat', [AiController::class, 'chat']);
 Route::post('/ai/recommendations', [AiController::class, 'recommendations']);
+
+// Optional: OpenRouter direct chat endpoint (simple passthrough)
+use App\Http\Controllers\ChatController;
+Route::post('/chat', [ChatController::class, 'send']);
