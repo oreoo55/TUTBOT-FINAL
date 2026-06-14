@@ -8,7 +8,6 @@ import {
   Users, Shield, Medal, Map, BadgeCheck, Wallet
 } from 'lucide-react';
 import { api, getAuthToken } from '../lib/api';
-import { ConfirmModal } from '../components/ConfirmModal';
 import { useTheme } from '../contexts/ThemeContext';
 import type { Landmark, User } from '../lib/types';
 
@@ -117,7 +116,7 @@ export function AdminDashboard() {
   const [editingLandmark, setEditingLandmark] = useState<Landmark | null>(null);
   const [landmarkForm, setLandmarkForm] = useState(emptyLandmark);
   const [savingLandmark, setSavingLandmark] = useState(false);
-  const [deleteLandmarkId, setDeleteLandmarkId] = useState<number | null>(null);
+  const [deleteLandmarkId, setDeleteLandmarkId] = useState<string | null>(null);
   const [imageMode, setImageMode] = useState<'url' | 'file'>('url');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -464,17 +463,7 @@ export function AdminDashboard() {
     setProcessingCancelId(null);
   };
 
-  const handleRejectCancel = async (id: number) => {
-    setProcessingCancelId(id);
-    try {
-      await api.post(`/admin/bookings/${id}/reject-cancellation`);
-      setCancelRequests(prev => prev.filter(r => Number(r.id) !== id));
-      setRejectConfirmId(null);
-    } catch {
-      setError('Failed to reject cancellation');
-    }
-    setProcessingCancelId(null);
-  };
+
 
   useEffect(() => {
     checkAdmin().then(isAdmin => {
@@ -556,7 +545,7 @@ export function AdminDashboard() {
         } else {
           await api.put(`/admin/landmarks/${editingLandmark.id}`, body);
         }
-        setLandmarks(prev => prev.map(l => l.id === editingLandmark.id ? { ...l, ...landmarkForm } : l));
+        setLandmarks(prev => prev.map(l => l.id === editingLandmark.id ? { ...l, ...(landmarkForm as Partial<Landmark>) } : l));
       } else {
         const created = await api.post<any>('/admin/landmarks', body);
         setLandmarks(prev => [...prev, created]);
@@ -1306,7 +1295,7 @@ export function AdminDashboard() {
                             <button onClick={() => openEditLandmark(lm)} className="p-1.5 text-navy/50 dark:text-slate-400 hover:text-royal dark:hover:text-gold transition-colors" title="Edit">
                               <Pencil className="w-4 h-4" />
                             </button>
-                            <button onClick={() => setDeleteLandmarkId(Number(lm.id))} className="p-1.5 text-navy/50 dark:text-slate-400 hover:text-red-500 transition-colors ml-1" title="Delete">
+                            <button onClick={() => setDeleteLandmarkId(lm.id)} className="p-1.5 text-navy/50 dark:text-slate-400 hover:text-red-500 transition-colors ml-1" title="Delete">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </td>

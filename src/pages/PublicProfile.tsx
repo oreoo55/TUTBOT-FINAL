@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   MapPin, Award, Star, MessageSquare, Calendar,
-  ArrowLeft, Trophy, ChevronRight
+  ArrowLeft, ChevronRight
 } from 'lucide-react';
 import { Skeleton } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';

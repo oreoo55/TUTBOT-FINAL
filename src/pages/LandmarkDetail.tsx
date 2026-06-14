@@ -21,6 +21,7 @@ import {
   Send } from
 'lucide-react';
 import { api } from '../lib/api';
+import { useContentPolling } from '../lib/useContentPolling';
 import { Skeleton } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';
 // ---- Weather helpers (Open-Meteo — free, no API key required) ----------
@@ -111,6 +112,7 @@ interface UserReview {
   rating: number;
   text: string;
   createdAt: string;
+  user?: { id: string };
 }
 export function LandmarkDetail() {
   const { id } = useParams();
@@ -121,6 +123,9 @@ export function LandmarkDetail() {
   const [dataError, setDataError] = useState('');
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewsError, setReviewsError] = useState('');
+  const [fetchKey, setFetchKey] = useState(0);
+
+  useContentPolling(['landmarks', 'reviews'], () => setFetchKey(k => k + 1));
 
   useEffect(() => {
     if (!id) return;
@@ -144,7 +149,7 @@ export function LandmarkDetail() {
         }
       });
     return () => abort.abort();
-  }, [id]);
+  }, [id, fetchKey]);
 
   useEffect(() => {
     api.get<any>('/me').then(u => setCurrentUser(u)).catch(() => {});

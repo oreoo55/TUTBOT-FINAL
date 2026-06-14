@@ -23,8 +23,8 @@ import {
   Check } from
 'lucide-react';
 import { Counter } from '../components/Counter';
-import { topTravelers, travelStories, landmarks } from '../data/mockData';
-import { api, getAuthToken } from '../lib/api';
+import { api } from '../lib/api';
+import { useContentPolling } from '../lib/useContentPolling';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { Skeleton } from '../components/Skeleton';
 import { EmptyState } from '../components/EmptyState';
@@ -98,6 +98,9 @@ export function Community() {
   const [postsError, setPostsError] = useState('');
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const [leaderboardError, setLeaderboardError] = useState('');
+  const [fetchKey, setFetchKey] = useState(0);
+
+  useContentPolling(['posts', 'landmarks'], () => setFetchKey(k => k + 1));
 
   useEffect(() => {
     const abort = new AbortController();
@@ -118,7 +121,7 @@ export function Community() {
       .then((res) => setLandmarks(res.data || []))
       .catch(() => {});
     return () => abort.abort();
-  }, []);
+  }, [fetchKey]);
 
   const filteredPosts =
   activeFilter === 'All' || activeFilter === 'Recent' ?
@@ -203,7 +206,7 @@ export function Community() {
     if (/^\d+$/.test(postId)) {
       try {
         const res = await api.post<any>(`/community/posts/${postId}/comments`, { text });
-        setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, commentList: (p.commentList || []).map((c) => c.id === tempId ? { ...c, id: res.id } : c) } : p));
+        setPosts((prev) => prev.map((p: any) => p.id === postId ? { ...p, commentList: ((p.commentList || []) as Comment[]).map((c: Comment) => c.id === tempId ? { ...c, id: res.id } : c) } : p));
       } catch { /* comment is already in local state */ }
     }
   };
@@ -225,7 +228,7 @@ export function Community() {
     {
       ...p,
       comments: p.comments + 1,
-      commentList: (p.commentList || []).map((c) =>
+      commentList: ((p.commentList || []) as Comment[]).map((c: Comment) =>
       c.id === commentId ?
       {
         ...c,

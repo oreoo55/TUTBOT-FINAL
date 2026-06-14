@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ContentVersion;
 use App\Models\Landmark;
 use App\Models\Review;
 use Illuminate\Http\JsonResponse;
@@ -19,8 +20,8 @@ class ReviewController extends Controller
             ->map(fn($r) => [
                 'id' => (string) $r->id,
                 'user_id' => $r->user ? (string) $r->user->id : null,
-                'name' => $r->user->name,
-                'avatar' => $r->user->avatar,
+                'name' => $r->user?->name ?? 'Anonymous',
+                'avatar' => $r->user?->avatar ?? null,
                 'rating' => $r->rating,
                 'text' => $r->text,
                 'location' => $r->landmark?->city ?? $r->landmark?->region ?? 'Egypt',
@@ -60,8 +61,13 @@ class ReviewController extends Controller
             'text' => 'required|string|max:2000',
         ]);
 
+        $uid = $request->user()->id;
+        if (Review::where('user_id', $uid)->where('landmark_id', $landmark->id)->exists()) {
+            return response()->json(['message' => 'You have already reviewed this landmark.'], 409);
+        }
+
         $review = Review::create([
-            'user_id' => $request->user()->id,
+            'user_id' => $uid,
             'landmark_id' => $landmark->id,
             'rating' => $validated['rating'],
             'text' => $validated['text'],
@@ -75,6 +81,8 @@ class ReviewController extends Controller
 
         $request->user()->addXp(20);
         $request->user()->checkBadges();
+        ContentVersion::bump('reviews');
+        ContentVersion::bump('landmarks');
 
         return response()->json([
             'id' => (string) $review->id,
@@ -110,6 +118,8 @@ class ReviewController extends Controller
         $landmark->save();
 
         $review->load('user');
+        ContentVersion::bump('reviews');
+        ContentVersion::bump('landmarks');
 
         return response()->json([
             'id' => (string) $review->id,
@@ -138,6 +148,8 @@ class ReviewController extends Controller
         $landmark->reviews_count = $landmark->reviews()->count();
         $landmark->rating = round($landmark->reviews()->avg('rating'), 2);
         $landmark->save();
+        ContentVersion::bump('reviews');
+        ContentVersion::bump('landmarks');
 
         return response()->json(null, 204);
     }

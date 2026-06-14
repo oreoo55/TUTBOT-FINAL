@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Bookmark, Check, X, RotateCcw } from 'lucide-react';
 import { useUserCollections } from '../contexts/UserCollectionsContext';

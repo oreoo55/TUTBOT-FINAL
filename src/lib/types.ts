@@ -158,7 +158,9 @@ export interface AiMessage {
 
 export type AiSuggestion =
 {type: 'landmark';id: string;name: string;} |
-{type: 'action';id: string;landmark_id?: string;label?: string;};
+{type: 'action';id: string;landmark_id?: string;label?: string;} |
+{type: 'restaurant';id: string;name: string;address?: string;maps_url?: string;description?: string;} |
+{type: 'hotel';id: string;name: string;star_rating?: string;address?: string;maps_url?: string;phone?: string;description?: string;};
 
 export interface AiChatRequest {
   conversation_id?: string | null;

@@ -43,20 +43,6 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string }> = {
   payment_refunded: { icon: <DollarSign className="w-3.5 h-3.5" />, color: 'text-emerald-500' },
 };
 
-const typeLabel: Record<string, string> = {
-  like: 'liked your post',
-  comment: 'commented on your post',
-  reply: 'replied to your comment',
-  trip_reminder: 'Trip reminder',
-  admin_message: 'Message from admin',
-  cancellation_approved: 'Cancellation approved',
-  cancellation_rejected: 'Cancellation rejected',
-  booking_confirmed: 'Booking confirmed',
-  booking_cancelled: 'Booking cancelled',
-  payment_approved: 'Payment approved',
-  payment_rejected: 'Payment rejected',
-  payment_refunded: 'Payment refunded',
-};
 
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);

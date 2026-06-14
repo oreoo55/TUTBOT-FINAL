@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '../lib/api';
+import { useContentPolling } from '../lib/useContentPolling';
 import {
   Search,
   Map as MapIcon,
@@ -20,8 +22,6 @@ import {
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { api } from '../lib/api';
-import { CardSkeleton } from '../components/Skeleton';
 import { LandmarkCard } from '../components/LandmarkCard';
 import { EmptyState } from '../components/EmptyState';
 // Fix Leaflet default icon issue
@@ -123,6 +123,10 @@ export function Discover() {
   const [allLandmarks, setAllLandmarks] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState<'loading' | 'error' | 'loaded'>('loading');
+  const [fetchKey, setFetchKey] = useState(0);
+
+  useContentPolling(['landmarks'], () => setFetchKey(k => k + 1));
+
   useEffect(() => {
     api.get<any>('/landmarks?per_page=200').then(res => {
       const items = Array.isArray(res) ? res : (res.data ?? []);
@@ -130,7 +134,7 @@ export function Discover() {
       setCategories(Array.from(new Set<string>(items.map((l: any) => l.category))).sort());
       setDataLoading('loaded');
     }).catch(() => { setDataLoading('error'); });
-  }, []);
+  }, [fetchKey]);
   // Hydrate filters from URL params on first mount so search from Landing/
   // NotFound actually carries through. If `type=category` and `q` matches an
   // existing category, promote it to a category chip and clear the search box.

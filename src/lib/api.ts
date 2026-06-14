@@ -50,10 +50,13 @@ export function getAuthToken(): string | null {
   return window.localStorage.getItem(TOKEN_KEY);
 }
 
+export const AUTH_CHANGED_EVENT = 'tutbot:auth-changed';
+
 export function setAuthToken(token: string | null) {
   if (typeof window === 'undefined') return;
   if (token) window.localStorage.setItem(TOKEN_KEY, token);else
   window.localStorage.removeItem(TOKEN_KEY);
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
 }
 
 export class ApiError extends Error {

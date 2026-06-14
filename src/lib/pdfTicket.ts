@@ -35,7 +35,6 @@ function hexRgb(hex: string) {
 }
 
 const [NR, NG, NB] = hexRgb(NAVY);
-const [GR, GG, GB] = hexRgb(GOLD);
 const [SR, SG, SB] = hexRgb(SAND);
 
 export async function downloadTicketPdf(data: TicketData, filename: string): Promise<void> {

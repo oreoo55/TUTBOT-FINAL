@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Comment;
+use App\Models\ContentVersion;
 use App\Models\Notification;
 use App\Models\Post;
 use Illuminate\Http\JsonResponse;
@@ -75,6 +76,8 @@ class CommentController extends Controller
             ]);
         }
 
+        ContentVersion::bump('posts');
+
         return response()->json($this->commentResponse($comment), 201);
     }
 
@@ -97,6 +100,7 @@ class CommentController extends Controller
         $comment->update(['text' => $validated['text']]);
 
         $comment->load('user');
+        ContentVersion::bump('posts');
 
         return response()->json($this->commentResponse($comment));
     }
@@ -118,6 +122,7 @@ class CommentController extends Controller
             $comment->delete();
             Post::where('id', (int) $postId)->decrement('comments_count');
         });
+        ContentVersion::bump('posts');
 
         return response()->json(null, 204);
     }

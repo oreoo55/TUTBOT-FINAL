@@ -43,7 +43,7 @@ class BadgeSeeder extends Seeder
                 'name' => 'Beach Lover',
                 'description' => 'Visited 3+ beaches',
                 'icon' => 'Umbrella',
-                'criteria' => ['type' => 'visit_count', 'category' => 'beach', 'count' => 3],
+                'criteria' => ['type' => 'visit_count', 'category' => 'Recreational', 'count' => 3],
             ],
             [
                 'id' => 'b6',

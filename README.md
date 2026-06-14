@@ -1,7 +1,7 @@
 
 # TUTBOT — Project Documentation
 
-A modern React frontend for discovering Egyptian landmarks, planning trips with an AI assistant, booking tickets, and engaging with a traveler community.
+A modern React + Laravel full-stack app for discovering Egyptian landmarks, planning trips with an AI assistant (TutBot), booking tickets with QR codes, and engaging with a traveler community — with real-time content sync and a polished AI chat experience.
 
 ---
 
@@ -46,10 +46,17 @@ php artisan serve
 ### 4. Database Setup
 1. Create a MySQL database named `tutbot`.
 2. Configure your database credentials in `backend/.env`.
-3. Import the initial data:
+3. Run migrations:
 ```bash
-# From the project root
+php artisan migrate
+```
+4. (Optional) Import seed data:
+```bash
 mysql -u root -p tutbot < backend/database/dump.sql
+```
+5. (Optional) Seed additional data:
+```bash
+php artisan db:seed
 ```
 
 ---
@@ -126,16 +133,19 @@ This repository contains both the frontend and the backend:
 - Tailwind CSS (with dark mode via `class` strategy)
 - Framer Motion for animation
 - Lucide React for icons
+- **Real-time content polling** via `useContentPolling` hook (15s interval, instant on tab focus)
 
 ### Backend
 - PHP 8.2+
 - Laravel 11+ with Sanctum (token auth)
 - MySQL 8+
+- `ContentVersion` model for tracking content changes (used by polling)
 - Optional: Redis for queue/cache
 - Optional: S3 (or local disk) for user-uploaded images/videos
 
-### AI (separate service or Laravel-resident)
-- Any LLM provider (OpenAI, Anthropic, local) — your choice
+### AI (Laravel-resident proxy)
+- OpenRouter API (any provider) — routed through `POST /api/ai/chat`
+- Conversations persisted in DB with guest support
 - Exposed to frontend ONLY through Laravel proxy endpoints
 
 ---
@@ -147,21 +157,29 @@ This repository contains both the frontend and the backend:
 ```
 /
 ├── backend/                      # Laravel 11 API
-│   ├── app/, routes/, ...        # Laravel source
+│   ├── app/
+│   │   ├── Http/Controllers/     # API controllers (landmarks, bookings, AI, community, content versions)
+│   │   ├── Models/               # Eloquent models (incl. ContentVersion, Hotel, Restaurant)
+│   │   └── ...
 │   ├── database/
+│   │   ├── migrations/           # Laravel migrations (incl. hotels, restaurants, content versions, guest_id)
+│   │   ├── seeders/              # Database seeders
 │   │   └── dump.sql              # MySQL database dump
-│   └── .env.example              # Backend environment template
+│   └── routes/api.php            # API route definitions
 │
 ├── src/                          # React Frontend source
-│   ├── components/               # Reusable UI
+│   ├── components/               # Reusable UI (AIAssistant, LandmarkCard, NotificationBell, etc.)
 │   ├── contexts/                 # Theme & User state
 │   ├── data/                     # Seed datasets
-│   ├── pages/                    # Main route components
-│   ├── lib/                      # API client & types
+│   ├── pages/                    # Main route components (Discover, LandmarkDetail, Community, etc.)
+│   ├── lib/
+│   │   ├── api.ts                # Thin fetch wrapper with auth
+│   │   ├── types.ts              # TypeScript types matching API responses
+│   │   ├── pdfTicket.ts          # PDF ticket generator
+│   │   └── useContentPolling.ts  # Real-time content polling hook
 │   └── .env.example              # Frontend environment template
 │
 ├── docs/                         # Specifications & DB schema
-├── .env.example                  # Root environment template (legacy)
 ├── .gitignore
 ├── package.json                  # Frontend dependencies
 └── README.md                     # This file
@@ -312,6 +330,8 @@ These files are intended specifically to make integration easier:
 | ----------------------------- | ----------------------------------------------------------------------- |
 | `lib/api.ts`                  | Thin fetch wrapper. Reads `VITE_API_URL`, attaches bearer token.        |
 | `lib/types.ts`                | TypeScript types matching every API response. Backend treats as source. |
+| `lib/useContentPolling.ts`    | Real-time polling hook — checks content versions every 15s.            |
+| `lib/pdfTicket.ts`            | Client-side PDF ticket generator for booking confirmation.              |
 | `docs/API_CONTRACT.md`        | Full endpoint catalogue with request/response examples.                 |
 | `docs/DATABASE_SCHEMA.sql`    | Runnable MySQL DDL — ready to import or convert to Laravel migrations.  |
 | `docs/AI_INTEGRATION.md`      | Tut-Assistant + recommendation brief, prompt scaffolding, tool schemas. |

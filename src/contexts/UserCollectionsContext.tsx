@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useEffect, createContext, useContext, type ReactNode } from 'react';
-import { getAuthToken } from '../lib/api';
+import { useCallback, useState, useEffect, createContext, useContext, type ReactNode } from 'react';
+import { getAuthToken, AUTH_CHANGED_EVENT } from '../lib/api';
 import { api } from '../lib/api';
 export interface Landmark {
   id: string;
@@ -35,7 +35,7 @@ export function UserCollectionsProvider({ children }: {children: ReactNode;}) {
   const [wishlist, setWishlist] = useState<Landmark[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  useEffect(() => {
+  const fetchCollections = useCallback(() => {
     const token = getAuthToken();
     if (!token) {
       setFavorites([]);
@@ -44,7 +44,14 @@ export function UserCollectionsProvider({ children }: {children: ReactNode;}) {
     }
     api.get<{ data: Landmark[] }>('/me/favorites').then(r => setFavorites(r.data)).catch(() => setFavorites([]));
     api.get<{ data: Landmark[] }>('/me/wishlist').then(r => setWishlist(r.data)).catch(() => setWishlist([]));
-  }, [getAuthToken()]);
+  }, []);
+
+  useEffect(() => {
+    fetchCollections();
+    const handler = () => fetchCollections();
+    window.addEventListener(AUTH_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, handler);
+  }, [fetchCollections]);
 
   const pushToast = useCallback(
     (text: string, type: ToastMessage['type'], landmark?: Landmark) => {

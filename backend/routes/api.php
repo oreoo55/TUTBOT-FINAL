@@ -114,8 +114,12 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::post('/users/notify', [AdminController::class, 'sendNotification']);
 });
 
+// ─── Content versions (polling for live updates) ───────────────────
+Route::get('/content/versions', [App\Http\Controllers\ContentVersionController::class, 'index']);
+
 // ─── Public Landmarks / Badges ─────────────────────────────────────
 Route::get('/landmarks', [LandmarkController::class, 'index']);
+Route::get('/landmarks/brief', [LandmarkController::class, 'brief']);
 Route::get('/landmarks/{id}', [LandmarkController::class, 'show']);
 Route::get('/landmarks/{id}/reviews', [ReviewController::class, 'index']);
 Route::get('/reviews/random', [ReviewController::class, 'random']);
@@ -136,6 +140,9 @@ Route::get('/users/{id}/reviews', [UserController::class, 'reviews']);
 // ─── AI (public with optional auth) ─────────────────────────────────
 Route::post('/ai/chat', [AiController::class, 'chat']);
 Route::post('/ai/recommendations', [AiController::class, 'recommendations']);
+Route::get('/ai/conversations', [AiController::class, 'conversations']);
+Route::get('/ai/conversations/{id}/messages', [AiController::class, 'conversationMessages'])->where('id', '[a-f0-9\-]+');
+Route::delete('/ai/conversations/{id}', [AiController::class, 'destroyConversation'])->where('id', '[a-f0-9\-]+');
 
 // Optional: OpenRouter direct chat endpoint (simple passthrough)
 use App\Http\Controllers\ChatController;

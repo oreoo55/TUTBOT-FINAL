@@ -52,7 +52,7 @@ export const LandmarkCard = React.memo(function LandmarkCard({
           alt={landmark.name}
           onError={(e) => {
             const img = e.currentTarget;
-            const fallback = (landmark as any).fallback_image;
+            const fallback = (landmark as any).fallbackImage;
             if (fallback && img.src !== fallback) {
               img.src = fallback;
             }
@@ -61,7 +61,7 @@ export const LandmarkCard = React.memo(function LandmarkCard({
         
 
         {/* Dark overlay on hover */}
-        <div className="absolute inset-0 bg-navy/0 group-hover:bg-navy/40 backdrop-blur-0 group-hover:backdrop-blur-[2px] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]" />
+        <div className="absolute inset-0 bg-navy/0 group-hover:bg-navy/40 backdrop-blur-0 group-hover:backdrop-blur-[2px] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none" />
 
         {/* Rating badge */}
         <div className="absolute top-3 left-3 bg-white/90 dark:bg-slate-card/90 backdrop-blur-sm px-2 py-1 rounded-lg text-xs font-bold text-navy dark:text-slate-100 flex items-center gap-1 shadow-sm z-10">
@@ -69,7 +69,7 @@ export const LandmarkCard = React.memo(function LandmarkCard({
         </div>
 
         {/* Quick Action Icons - top right */}
-        <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] z-20">
+        <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] z-30">
           <QuickActionButton
             active={favorited}
             onClick={(e) => handleAction(e, 'favorite')}
@@ -142,13 +142,13 @@ export const LandmarkCard = React.memo(function LandmarkCard({
         </div>
 
         {/* Hover overlay buttons */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 pointer-events-none">
           <button
             onClick={(e) => {
               e.stopPropagation();
               setShow360(true);
             }}
-            className="bg-white/20 backdrop-blur-md border border-white/50 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 hover:scale-105 transition-all duration-200"
+            className="bg-white/20 backdrop-blur-md border border-white/50 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-white/30 hover:scale-105 transition-all duration-200 pointer-events-auto"
           >
             <Eye className="w-4 h-4" /> 360° Preview
           </button>
@@ -157,7 +157,7 @@ export const LandmarkCard = React.memo(function LandmarkCard({
               e.stopPropagation();
               navigate(`/landmark/${landmark.id}`);
             }}
-            className="bg-gold/80 backdrop-blur-md border border-gold/50 text-white px-5 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-gold hover:scale-105 transition-all duration-200"
+            className="bg-gold/80 backdrop-blur-md border border-gold/50 text-white px-5 py-2 rounded-xl flex items-center gap-2 text-sm font-medium hover:bg-gold hover:scale-105 transition-all duration-200 pointer-events-auto"
           >
             View Landmark
           </button>

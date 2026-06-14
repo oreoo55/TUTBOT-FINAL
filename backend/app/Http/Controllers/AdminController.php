@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\Comment;
+use App\Models\ContentVersion;
 use App\Models\Landmark;
 use App\Models\Notification;
 use App\Models\Post;
@@ -90,6 +91,7 @@ class AdminController extends Controller
         $validated['image'] = $this->resolveImage($request);
 
         $landmark = Landmark::create($validated);
+        ContentVersion::bump('landmarks');
 
         return response()->json($landmark, 201);
     }
@@ -124,6 +126,7 @@ class AdminController extends Controller
         $validated['image'] = $this->resolveImage($request, $landmark);
 
         $landmark->update($validated);
+        ContentVersion::bump('landmarks');
 
         return response()->json($landmark);
     }
@@ -134,6 +137,7 @@ class AdminController extends Controller
 
         $landmark = Landmark::findOrFail((int) $id);
         $landmark->delete();
+        ContentVersion::bump('landmarks');
 
         return response()->json(null, 204);
     }
@@ -152,7 +156,9 @@ class AdminController extends Controller
             $landmark->reviews_count = $landmark->reviews()->count();
             $landmark->rating = round($landmark->reviews()->avg('rating'), 2);
             $landmark->save();
+            ContentVersion::bump('landmarks');
         }
+        ContentVersion::bump('reviews');
 
         return response()->json(null, 204);
     }
@@ -167,7 +173,9 @@ class AdminController extends Controller
 
         if ($landmark = $post->landmark) {
             $landmark->decrement('comments_count', $commentsCount);
+            ContentVersion::bump('landmarks');
         }
+        ContentVersion::bump('posts');
 
         return response()->json(null, 204);
     }
@@ -182,6 +190,7 @@ class AdminController extends Controller
 
         if ($post) {
             $post->decrement('comments_count');
+            ContentVersion::bump('posts');
         }
 
         return response()->json(null, 204);
@@ -446,6 +455,7 @@ class AdminController extends Controller
             'type' => 'booking_cancelled',
             'data' => $notifData,
         ]);
+        ContentVersion::bump('bookings');
 
         return response()->json(['success' => true, 'id' => (string) $booking->id, 'status' => 'cancelled']);
     }
@@ -551,6 +561,7 @@ class AdminController extends Controller
         $wasRefunded = $booking->payment_status === 'refunded';
         $booking->update($validated);
         $booking->load('user', 'landmark');
+        ContentVersion::bump('bookings');
 
         if (isset($validated['payment_status']) && $validated['payment_status'] === 'refunded' && !$wasRefunded) {
             $landmarkName = $booking->landmark?->name ?? 'Booking';
@@ -627,6 +638,7 @@ class AdminController extends Controller
         }
 
         $booking->update(['payment_status' => 'paid']);
+        ContentVersion::bump('bookings');
 
         $landmarkName = $booking->landmark?->name ?? 'Booking';
         Notification::create([
@@ -670,6 +682,7 @@ class AdminController extends Controller
             'cancelled_at' => now(),
             'cancellation_reason' => $validated['reason'] ?? 'Payment rejected by admin',
         ]);
+        ContentVersion::bump('bookings');
 
         $landmarkName = $booking->landmark?->name ?? 'Booking';
         Notification::create([

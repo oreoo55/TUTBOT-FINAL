@@ -1,6 +1,5 @@
-import React from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { Compass, Shield, Sparkles, Heart, ArrowRight } from 'lucide-react';
+import { Shield, Sparkles, Heart, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Counter } from '../components/Counter';
 export function About() {

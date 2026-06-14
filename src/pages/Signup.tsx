@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Eye,
@@ -40,7 +40,6 @@ interface FormData {
   agreedToTerms: boolean;
 }
 export function Signup() {
-  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -184,12 +183,12 @@ export function Signup() {
         }
         setIsSubmitting(false);
       }
-      setCurrentStep(currentStep + 1);
+      goToStep(currentStep + 1);
     }
   };
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      goToStep(currentStep - 1);
       setErrors({});
       setApiError('');
     }

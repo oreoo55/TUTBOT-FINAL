@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ContentVersion;
 use App\Models\Notification;
 use App\Models\Post;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,8 @@ class PostLikeController extends Controller
                 ]);
             }
         }
+
+        ContentVersion::bump('posts');
 
         return response()->json([
             'likes' => $post->fresh()->likes_count,

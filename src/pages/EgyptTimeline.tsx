@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, Clock, User, Image as ImageIcon, Lightbulb } from 'lucide-react';
 
@@ -25,9 +25,6 @@ interface Era {
   figures: Figure[];
   gallery: string[];
 }
-
-const uiAvatar = (name: string) =>
-  `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=D4AF37&color=fff&size=128`;
 
 const proxyImg = (url: string) =>
   `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=128&h=128&fit=cover`;

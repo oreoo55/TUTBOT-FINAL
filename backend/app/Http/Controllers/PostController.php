@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ContentVersion;
 use App\Models\Post;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,6 +44,7 @@ class PostController extends Controller
         $validated = $request->validate([
             'text' => 'required|string|max:5000',
             'landmark_id' => 'nullable|exists:landmarks,id',
+            'category' => 'sometimes|string|in:Archaeological,Museum,Religious,Recreational,Cultural,General',
             'image' => 'nullable|file|image|max:10240',
             'video' => 'nullable|file|mimetypes:video/mp4,video/quicktime|max:51200',
         ]);
@@ -72,6 +74,7 @@ class PostController extends Controller
 
         $request->user()->addXp(15);
         $request->user()->checkBadges();
+        ContentVersion::bump('posts');
 
         return response()->json($this->postResponse($post, $request->user()->id), 201);
     }
@@ -91,6 +94,7 @@ class PostController extends Controller
         $post->update(['text' => $validated['text']]);
 
         $post->load(['user' => fn($q) => $q->withCount('badges')], 'landmark');
+        ContentVersion::bump('posts');
 
         return response()->json($this->postResponse($post, $request->user()->id));
     }
@@ -108,6 +112,8 @@ class PostController extends Controller
             $post->likes()->delete();
             $post->delete();
         });
+        ContentVersion::bump('posts');
+        ContentVersion::bump('landmarks');
 
         return response()->json(null, 204);
     }

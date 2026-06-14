@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef, Component } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -48,7 +48,7 @@ export function Landing() {
     api.get<any>('/landmarks?sort=rating&per_page=200', { signal: abort.signal }).then(res => {
       const items = res.data || [];
       setAllLandmarks(items);
-      const sorted = [...items].sort((a: any, b: any) => b.rating - a.rating || (b.reviews_count ?? 0) - (a.reviews_count ?? 0));
+      const sorted = [...items].sort((a: any, b: any) => b.rating - a.rating || (b.reviews ?? 0) - (a.reviews ?? 0));
       setTopLandmarks(sorted.slice(0, 3));
       setLandmarksError('');
     }).catch(() => { if (!abort.signal.aborted) setLandmarksError('Failed to load landmarks'); }).finally(() => setLandmarksLoading(false));

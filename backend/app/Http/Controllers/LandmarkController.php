@@ -79,6 +79,18 @@ class LandmarkController extends Controller
         return response()->json($landmarks);
     }
 
+    public function brief(): JsonResponse
+    {
+        $landmarks = Landmark::select('id', 'name')->orderBy('name')->get();
+
+        return response()->json([
+            'data' => $landmarks->map(fn ($l) => [
+                'id' => (string) $l->id,
+                'name' => $l->name,
+            ]),
+        ]);
+    }
+
     public function show(string $id): JsonResponse
     {
         $landmark = Landmark::with('reviews.user')->findOrFail((int) $id);

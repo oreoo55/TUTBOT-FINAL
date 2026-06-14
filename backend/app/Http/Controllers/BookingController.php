@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Models\ContentVersion;
 use App\Models\Landmark;
 use App\Models\Notification;
 use Illuminate\Http\JsonResponse;
@@ -95,6 +96,8 @@ class BookingController extends Controller
             ],
         ]);
 
+        ContentVersion::bump('bookings');
+
         return response()->json($this->bookingResponse($booking), 201);
     }
 
@@ -122,16 +125,24 @@ class BookingController extends Controller
         return response()->json($bookings);
     }
 
-    public function show(string $id): JsonResponse
+    public function show(Request $request, string $id): JsonResponse
     {
         $booking = Booking::with('landmark')->findOrFail((int) $id);
+
+        if ($booking->user_id !== $request->user()->id && !$request->user()?->is_admin) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
 
         return response()->json($this->bookingResponse($booking));
     }
 
-    public function requestCancellation(string $id): JsonResponse
+    public function requestCancellation(Request $request, string $id): JsonResponse
     {
         $booking = Booking::findOrFail((int) $id);
+
+        if ($booking->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
 
         if ($booking->status === 'cancelled') {
             return response()->json(['message' => 'Booking already cancelled.'], 400);
@@ -144,6 +155,7 @@ class BookingController extends Controller
         $booking->update([
             'cancellation_requested_at' => now(),
         ]);
+        ContentVersion::bump('bookings');
 
         return response()->json([
             'id' => (string) $booking->id,
@@ -170,6 +182,7 @@ class BookingController extends Controller
             'cancelled_at' => $now,
             'cancellation_requested_at' => null,
         ]);
+        ContentVersion::bump('bookings');
 
         $landmarkName = $booking->landmark?->name ?? 'Booking';
         Notification::create([
@@ -203,6 +216,7 @@ class BookingController extends Controller
         }
 
         $booking->update(['cancellation_requested_at' => null]);
+        ContentVersion::bump('bookings');
 
         $landmarkName = $booking->landmark?->name ?? 'Booking';
         Notification::create([

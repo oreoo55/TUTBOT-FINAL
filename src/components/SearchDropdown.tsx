@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef, Component } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Search, ArrowRight, Tag, Star } from 'lucide-react';
@@ -31,7 +31,6 @@ export function SearchDropdown({
   open,
   onClose,
   onSubmit,
-  align = 'left'
 }: SearchDropdownProps) {
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
