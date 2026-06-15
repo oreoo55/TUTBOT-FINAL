@@ -5,6 +5,7 @@ use App\Http\Controllers\AiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CommentController;
+use App\Http\Controllers\ContactController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\LandmarkController;
 use App\Http\Controllers\LeaderboardController;
@@ -19,6 +20,12 @@ use Illuminate\Support\Facades\Route;
 // ─── Auth ───────────────────────────────────────────────────────────
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/auth/verify-otp', [AuthController::class, 'verifyOtp']);
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
+
+// ─── Contact ──────────────────────────────────────────────────────────
+Route::post('/contact', [ContactController::class, 'store']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -79,6 +86,10 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::delete('/posts/{id}', [AdminController::class, 'destroyPost']);
     Route::get('/comments', [AdminController::class, 'listComments']);
     Route::delete('/comments/{id}', [AdminController::class, 'destroyComment']);
+
+    // Contact messages
+    Route::get('/contact-messages', [AdminController::class, 'listContactMessages']);
+    Route::delete('/contact-messages/{id}', [AdminController::class, 'destroyContactMessage']);
 
     // Bookings list (paginated, filterable)
     Route::get('/bookings', [AdminController::class, 'listBookings']);

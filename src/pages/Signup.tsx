@@ -221,7 +221,12 @@ export function Signup() {
     setCurrentStep(step);
   };
   return (
-    <div className="min-h-screen flex">
+    <motion.div
+      initial={{ opacity: 0, x: 40 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -40 }}
+      transition={{ duration: 0.25, ease: 'easeInOut' }}
+      className="min-h-screen flex">
       {/* LEFT PANEL - Desktop only */}
       <div className="hidden lg:flex lg:w-[40%] relative overflow-hidden">
         <img
@@ -920,7 +925,7 @@ export function Signup() {
           <p className="text-center text-sm text-navy/60 dark:text-slate-400 mt-8">
               Already have an account?{' '}
               <Link
-              to="/signup"
+              to="/login"
               className="text-royal dark:text-gold hover:text-gold font-medium">
               
                 Sign in
@@ -929,6 +934,6 @@ export function Signup() {
           }
         </div>
       </div>
-    </div>);
+    </motion.div>);
 
 }

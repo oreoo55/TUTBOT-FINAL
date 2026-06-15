@@ -11,7 +11,7 @@ import { api, getAuthToken } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import type { Landmark, User } from '../lib/types';
 
-type Tab = 'stats' | 'users' | 'landmarks' | 'moderation' | 'bookings' | 'payments' | 'verify';
+type Tab = 'stats' | 'users' | 'landmarks' | 'moderation' | 'bookings' | 'payments' | 'verify' | 'messages';
 type ModSubTab = 'reviews' | 'posts' | 'comments';
 
 interface AdminStats {
@@ -75,6 +75,7 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'bookings', label: 'Bookings', icon: <FileDown className="w-4 h-4" /> },
   { key: 'payments', label: 'Payments', icon: <Wallet className="w-4 h-4" /> },
   { key: 'verify', label: 'Verify Ticket', icon: <QrCode className="w-4 h-4" /> },
+  { key: 'messages', label: 'Contact', icon: <Mail className="w-4 h-4" /> },
 ];
 
 const modSubTabs: { key: ModSubTab; label: string }[] = [
@@ -163,6 +164,13 @@ export function AdminDashboard() {
   const [processingPaymentId, setProcessingPaymentId] = useState<number | null>(null);
   const [rejectPaymentId, setRejectPaymentId] = useState<number | null>(null);
   const [rejectPaymentReason, setRejectPaymentReason] = useState('');
+
+  // Contact messages
+  const [messages, setMessages] = useState<any[]>([]);
+  const [messagesPage, setMessagesPage] = useState(1);
+  const [messagesTotal, setMessagesTotal] = useState(0);
+  const [messagesLastPage, setMessagesLastPage] = useState(1);
+  const [messagesLoading, setMessagesLoading] = useState(false);
 
   const handleQrVerify = async (token: string) => {
     if (!token || token.length !== 64) {
@@ -428,6 +436,20 @@ export function AdminDashboard() {
     setPaymentsLoading(false);
   }, []);
 
+  const fetchMessages = useCallback(async () => {
+    setMessagesLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(messagesPage), per_page: '20' });
+      const data = await api.get<{ data: any[]; total: number; last_page: number }>(`/admin/contact-messages?${params}`);
+      setMessages(data.data);
+      setMessagesTotal(data.total);
+      setMessagesLastPage(data.last_page);
+    } catch {
+      setError('Failed to load contact messages');
+    }
+    setMessagesLoading(false);
+  }, [messagesPage]);
+
   const handleApprovePayment = async (id: number) => {
     setProcessingPaymentId(id);
     try {
@@ -481,7 +503,8 @@ export function AdminDashboard() {
     if (tab === 'moderation') fetchModeration();
     if (tab === 'bookings') fetchBookings();
     if (tab === 'payments') fetchPayments();
-  }, [tab, fetchUsers, fetchModeration, fetchBookings, fetchPayments]);
+    if (tab === 'messages') fetchMessages();
+  }, [tab, fetchUsers, fetchModeration, fetchBookings, fetchPayments, fetchMessages]);
 
   // Stop camera when leaving verify tab or unmounting
   useEffect(() => {
@@ -2237,6 +2260,109 @@ export function AdminDashboard() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </motion.div>
+          )}
+
+          {/* ─── CONTACT MESSAGES TAB ─────────────────────────────────── */}
+          {tab === 'messages' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-serif font-bold text-navy dark:text-slate-100">Contact Messages</h2>
+                  <p className="text-sm text-navy/60 dark:text-slate-400 mt-1">{messagesTotal} total messages</p>
+                </div>
+              </div>
+
+              {messagesLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 animate-spin text-gold" />
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="bg-white dark:bg-slate-card rounded-2xl border border-sand dark:border-slate-border p-12 text-center">
+                  <Mail className="w-12 h-12 mx-auto mb-4 text-navy/20 dark:text-slate-500" />
+                  <p className="text-navy/60 dark:text-slate-400">No contact messages yet.</p>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-card rounded-2xl border border-sand dark:border-slate-border overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-sand/20 dark:bg-slate-border/40">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-navy/60 dark:text-slate-400 uppercase">Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-navy/60 dark:text-slate-400 uppercase">Email</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-navy/60 dark:text-slate-400 uppercase">Subject</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-navy/60 dark:text-slate-400 uppercase">Message</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-navy/60 dark:text-slate-400 uppercase">Date</th>
+                          <th className="px-4 py-3 text-right text-xs font-semibold text-navy/60 dark:text-slate-400 uppercase">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-sand dark:divide-slate-border">
+                        {messages.map((msg: any) => (
+                          <tr key={msg.id} className="hover:bg-sand/10 dark:hover:bg-slate-border/20 transition-colors">
+                            <td className="px-4 py-3">
+                              <span className="font-medium text-navy dark:text-slate-100">{msg.first_name} {msg.last_name}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-navy/70 dark:text-slate-300">{msg.email}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex px-2.5 py-1 bg-royal/5 dark:bg-royal/10 text-royal dark:text-gold text-xs font-medium rounded-full capitalize">{msg.subject}</span>
+                            </td>
+                            <td className="px-4 py-3 max-w-xs">
+                              <p className="text-navy/70 dark:text-slate-300 truncate">{msg.message}</p>
+                            </td>
+                            <td className="px-4 py-3 text-navy/60 dark:text-slate-400 text-xs whitespace-nowrap">
+                              {new Date(msg.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={async () => {
+                                  if (!confirm('Delete this message?')) return;
+                                  try {
+                                    await api.delete(`/admin/contact-messages/${msg.id}`);
+                                    setMessages(prev => prev.filter(m => m.id !== msg.id));
+                                    setMessagesTotal(prev => prev - 1);
+                                  } catch {
+                                    setError('Failed to delete message');
+                                  }
+                                }}
+                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {messagesLastPage > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-sand dark:border-slate-border">
+                      <span className="text-xs text-navy/60 dark:text-slate-400">
+                        Page {messagesPage} of {messagesLastPage} ({messagesTotal} total)
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          disabled={messagesPage <= 1}
+                          onClick={() => setMessagesPage(p => p - 1)}
+                          className="px-3 py-1.5 text-sm border border-sand dark:border-slate-border rounded-lg hover:bg-sand/30 dark:hover:bg-slate-border/40 disabled:opacity-40 transition-colors"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          disabled={messagesPage >= messagesLastPage}
+                          onClick={() => setMessagesPage(p => p + 1)}
+                          className="px-3 py-1.5 text-sm border border-sand dark:border-slate-border rounded-lg hover:bg-sand/30 dark:hover:bg-slate-border/40 disabled:opacity-40 transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </main>

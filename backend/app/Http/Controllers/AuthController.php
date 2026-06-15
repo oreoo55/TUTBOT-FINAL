@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -114,6 +115,76 @@ class AuthController extends Controller
         $user->update($validated);
 
         return response()->json($this->userResponse($user));
+    }
+
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email|exists:users',
+        ]);
+
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $validated['email']],
+            ['token' => Hash::make($otp), 'created_at' => now()]
+        );
+
+        $isDev = config('app.env') === 'local' || config('app.env') === 'development';
+        $response = ['message' => 'If the email exists, an OTP has been sent.'];
+
+        if ($isDev) {
+            $response['otp'] = $otp;
+        }
+
+        return response()->json($response);
+    }
+
+    public function verifyOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email|exists:users',
+        ]);
+
+        $resetToken = bin2hex(random_bytes(32));
+
+        DB::table('password_reset_tokens')
+            ->where('email', $validated['email'])
+            ->update(['token' => Hash::make($resetToken), 'created_at' => now()]);
+
+        return response()->json([
+            'message' => 'OTP verified.',
+            'reset_token' => $resetToken,
+        ]);
+    }
+
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => 'required|email|exists:users',
+            'reset_token' => 'required|string',
+            'password' => 'required|string|min:6',
+        ]);
+
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $validated['email'])
+            ->first();
+
+        if (!$record || !Hash::check($validated['reset_token'], $record->token)) {
+            return response()->json(['message' => 'Invalid reset token.'], 400);
+        }
+
+        if (now()->diffInMinutes($record->created_at) > 10) {
+            return response()->json(['message' => 'Reset token has expired.'], 400);
+        }
+
+        User::where('email', $validated['email'])->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
+
+        return response()->json(['message' => 'Password has been reset successfully.']);
     }
 
     private function userResponse(User $user): array

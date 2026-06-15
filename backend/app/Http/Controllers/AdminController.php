@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\Comment;
+use App\Models\ContactMessage;
 use App\Models\ContentVersion;
 use App\Models\Landmark;
 use App\Models\Notification;
@@ -192,6 +193,45 @@ class AdminController extends Controller
             $post->decrement('comments_count');
             ContentVersion::bump('posts');
         }
+
+        return response()->json(null, 204);
+    }
+
+    // ─── Contact Messages ───────────────────────────────────────────
+
+    public function listContactMessages(Request $request): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $query = ContactMessage::query();
+
+        if ($request->filled('name')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('first_name', 'like', '%' . $request->name . '%')
+                  ->orWhere('last_name', 'like', '%' . $request->name . '%');
+            });
+        }
+        if ($request->filled('email')) {
+            $query->where('email', 'like', '%' . $request->email . '%');
+        }
+        if ($request->filled('subject')) {
+            $query->where('subject', 'like', '%' . $request->subject . '%');
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        return response()->json($query->latest()->paginate($request->integer('per_page', 20)));
+    }
+
+    public function destroyContactMessage(Request $request, string $id): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        ContactMessage::findOrFail((int) $id)->delete();
 
         return response()->json(null, 204);
     }

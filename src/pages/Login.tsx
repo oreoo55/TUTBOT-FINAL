@@ -38,6 +38,9 @@ export function Login() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>(
     {}
   );
+  const [apiError, setApiError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resetToken, setResetToken] = useState('');
   const [showAdminChoice, setShowAdminChoice] = useState(false);
   const [adminData, setAdminData] = useState<AuthResponse | null>(null);
   // Rotate testimonials
@@ -93,6 +96,7 @@ export function Login() {
     );
     setView(newView);
     setErrors({});
+    setApiError('');
   };
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +134,7 @@ export function Login() {
       }
     }
   };
-  const handleForgotPassword = (e: React.FormEvent) => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Partial<Record<keyof FormData, string>> = {};
     if (!formData.email.trim()) {
@@ -139,10 +143,18 @@ export function Login() {
       newErrors.email = 'Invalid email address';
     }
     setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) {
+    if (Object.keys(newErrors).length > 0) return;
+    setIsSubmitting(true);
+    setApiError('');
+    try {
+      await api.post('/auth/forgot-password', { email: formData.email });
       setResendTimer(60);
       setCanResend(false);
       goToView('otp');
+    } catch (err: any) {
+      setApiError(err.body?.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
   const handleOtpChange = (index: number, value: string) => {
@@ -181,16 +193,27 @@ export function Login() {
     const lastIndex = Math.min(pastedData.length, 5);
     inputRefs.current[lastIndex]?.focus();
   };
-  const handleVerifyOtp = () => {
-    if (formData.otp.every((digit) => digit !== '')) {
-      goToView('reset');
-    } else {
-      setErrors({
-        otp: 'Please enter all 6 digits'
+  const handleVerifyOtp = async () => {
+    if (!formData.otp.every((digit) => digit !== '')) {
+      setErrors({ otp: 'Please enter all 6 digits' });
+      return;
+    }
+    setIsSubmitting(true);
+    setApiError('');
+    try {
+      const res = await api.post<{ reset_token: string }>('/auth/verify-otp', {
+        email: formData.email,
+        otp: formData.otp.join(''),
       });
+      setResetToken(res.reset_token);
+      goToView('reset');
+    } catch (err: any) {
+      setApiError(err.body?.message || 'Invalid OTP. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Partial<Record<keyof FormData, string>> = {};
     if (!formData.newPassword) {
@@ -202,15 +225,34 @@ export function Login() {
       newErrors.confirmPassword = 'Passwords do not match';
     }
     setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) {
+    if (Object.keys(newErrors).length > 0) return;
+    setIsSubmitting(true);
+    setApiError('');
+    try {
+      await api.post('/auth/reset-password', {
+        email: formData.email,
+        reset_token: resetToken,
+        password: formData.newPassword,
+      });
       goToView('success');
+    } catch (err: any) {
+      setApiError(err.body?.message || 'Failed to reset password. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
-  const handleResendCode = () => {
-    if (canResend) {
+  const handleResendCode = async () => {
+    if (!canResend) return;
+    setIsSubmitting(true);
+    setApiError('');
+    try {
+      await api.post('/auth/forgot-password', { email: formData.email });
       setResendTimer(60);
       setCanResend(false);
-      // In real app, would trigger API call to resend code
+    } catch (err: any) {
+      setApiError(err.body?.message || 'Failed to resend code.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
   const resetToLogin = () => {
@@ -240,7 +282,12 @@ export function Login() {
     })
   };
   return (
-    <div className="min-h-screen flex">
+    <motion.div
+      initial={{ opacity: 0, x: -40 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 40 }}
+      transition={{ duration: 0.25, ease: 'easeInOut' }}
+      className="min-h-screen flex">
       {/* LEFT PANEL - Desktop only */}
       <div className="hidden lg:flex lg:w-[40%] relative overflow-hidden">
         <img
@@ -558,11 +605,16 @@ export function Login() {
                       }
                       </div>
 
+                      {apiError &&
+                      <p className="text-red-500 text-sm text-center">{apiError}</p>
+                      }
+
                       <button
                       type="submit"
-                      className="w-full bg-gold text-white py-3 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all">
+                      disabled={isSubmitting}
+                      className="w-full bg-gold text-white py-3 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       
-                        Send code
+                        {isSubmitting ? 'Sending...' : 'Send code'}
                       </button>
                     </form>
 
@@ -640,9 +692,13 @@ export function Login() {
                       }
                       </div>
 
+                      {apiError &&
+                      <p className="text-red-500 text-sm text-center">{apiError}</p>
+                      }
+
                       <button
                       onClick={handleVerifyOtp}
-                      disabled={!formData.otp.every((digit) => digit !== '')}
+                      disabled={!formData.otp.every((digit) => digit !== '') || isSubmitting}
                       className="w-full bg-gold text-white py-3 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       
                         Verify
@@ -751,11 +807,16 @@ export function Login() {
                       }
                       </div>
 
+                      {apiError &&
+                      <p className="text-red-500 text-sm text-center mb-4">{apiError}</p>
+                      }
+
                       <button
                       type="submit"
-                      className="w-full bg-gold text-white py-3 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all">
+                      disabled={isSubmitting}
+                      className="w-full bg-gold text-white py-3 rounded-xl font-medium hover:bg-gold/90 hover:shadow-glow transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                       
-                        Reset password
+                        {isSubmitting ? 'Resetting...' : 'Reset password'}
                       </button>
                     </form>
                   </div>
@@ -847,6 +908,6 @@ export function Login() {
           </motion.div>
         </div>
       )}
-    </div>);
+    </motion.div>);
 
 }
