@@ -120,8 +120,8 @@ export function Booking() {
   }
   const ticketPrice = landmark.price;
   const subtotal = adults * ticketPrice + children * ticketPrice * 0.5;
-  const serviceFee = ticketPrice === 0 ? 0 : 50;
-  const total = ticketPrice === 0 ? 0 : subtotal + serviceFee;
+  const serviceFee = 50;
+  const total = subtotal + serviceFee;
   const handleNext = () => {
     if (step < 4) setStep(step + 1);
   };

@@ -37,8 +37,8 @@ class BookingController extends Controller
         $adults = $validated['adults'];
         $children = $validated['children'];
         $subtotal = $adults * $price + $children * $price * 0.5;
-        $serviceFee = $price === 0 ? 0 : 50;
-        $total = $price === 0 ? 0 : (int) $subtotal + $serviceFee;
+        $serviceFee = 50;
+        $total = (int) $subtotal + $serviceFee;
 
         do {
             $confirmationCode = strtoupper(Str::random(6));

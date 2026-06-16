@@ -329,7 +329,7 @@ export function LandmarkDetail() {
           }}
           className="w-full h-full object-cover" />
         
-        <div className="absolute inset-0 bg-gradient-to-t from-offwhite via-navy/20 to-navy/40" />
+        <div className="absolute inset-0 bg-gradient-to-t from-offwhite dark:from-slate-card via-transparent to-black/50" />
 
         <motion.button
           whileHover={{ scale: 1.08 }}
